@@ -1,9 +1,6 @@
-# LingkodHub
-Community-based platform connecting residents with trusted local service providers.
+ LingkodHub
 
-# KapitKalinga
-
-KapitKalinga is a web application designed to help barangay residents easily find and hire trusted local service providers. Inspired by how communities currently post requests on social media, this platform streamlines the process by showing volunteer profiles, skills, ratings, and location, allowing users to select the best fit for their tasks.
+LingkodHub is a web application that helps barangay residents easily find and hire trusted local service providers. Inspired by how communities currently post requests on social media, this platform streamlines the process by showing volunteer profiles, skills, ratings, and location, allowing users to select the best fit for their tasks.
 
 ## Features
 - User registration and login
