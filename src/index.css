@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-primary: #059669; /* Richer green for better contrast */
+    --brand-primary-container: #d1fae5;
+    --brand-on-primary-container: #064e3b;
+    --brand-surface: #ffffff;
+    --brand-surface-container: #f8fafc; /* Very soft slate for main background */
+    --brand-surface-card: #ffffff;
+    --brand-outline: #e2e8f0; /* Crisp solid border */
+    --brand-text-main: #0f172a;
+    --brand-text-variant: #64748b;
+    --brand-accent: #f59e0b;
+    
+    --shadow-level-1: 0px 4px 12px rgba(15, 23, 42, 0.04);
+    --shadow-level-2: 0px 8px 24px rgba(15, 23, 42, 0.08);
+  }
+
+  .dark {
+    --brand-primary: #10b981;
+    --brand-primary-container: #18181b;
+    --brand-on-primary-container: #10b981;
+    --brand-surface: #121212;
+    --brand-surface-container: #18181b;
+    --brand-surface-card: #27272a;
+    --brand-outline: rgba(255, 255, 255, 0.1);
+    --brand-text-main: #f8fafc;
+    --brand-text-variant: #94a3b8;
+    --brand-accent: #fbbf24;
+    
+    --shadow-level-1: 0px 8px 30px rgba(0, 0, 0, 0.15);
+    --shadow-level-2: 0px 16px 40px rgba(0, 0, 0, 0.25);
+  }
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@theme {
+  --color-white: #ffffff;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-container: var(--brand-primary-container);
+  --color-brand-on-primary-container: var(--brand-on-primary-container);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-surface-container: var(--brand-surface-container);
+  --color-brand-surface-card: var(--brand-surface-card);
+  --color-brand-outline: var(--brand-outline);
+  --color-brand-text-main: var(--brand-text-main);
+  --color-brand-text-variant: var(--brand-text-variant);
+  
+  --color-brand-accent: var(--brand-accent);
+  
+  --radius-sm: 0.75rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  
+  --shadow-level-1: var(--shadow-level-1);
+  --shadow-level-2: var(--shadow-level-2);
+}
+
+@layer base {
+  body {
+    @apply bg-brand-surface text-brand-text-main font-sans antialiased;
+  }
+}
