@@ -1,53 +1,63 @@
-# react-example
+# LingkodHub - Local Services Marketplace
 
-Local services marketplace app built with React, Express, and SQLite.
+LingkodHub is a comprehensive platform for connecting service providers and clients for various local tasks and professional services.
 
-## Requirements
+---
 
-- Node.js 20+
-- npm
+## 📚 Documentation
 
-## Environment
+For a detailed breakdown of the project architecture, features, database schema, and technical implementation, please refer to the:
 
-Create a `.env` file in the project root:
+👉 **[Comprehensive Project Documentation (DOCUMENTATION.md)](./DOCUMENTATION.md)**
 
+---
+
+## 🚀 Quick Start
+
+### 1. Prerequisites
+- **Node.js**: v18 or higher
+- **npm**: v9 or higher
+
+### 2. Installation
+```bash
+npm install
+```
+
+### 3. Configuration
+Create a `.env` file in the root directory (refer to `.env.example`):
 ```env
-JWT_SECRET=replace_with_a_strong_secret
+JWT_SECRET=your_secret_key_here
 PORT=3000
 APP_URL=http://localhost:3000
 ```
 
-## Scripts
+### 4. Development
+Start the development server (runs both Express API and Vite frontend):
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-- `npm run dev`: start API + Vite in development mode
-- `npm run start`: start server with `tsx`
-- `npm run build`: build frontend bundle
-- `npm run preview`: preview built frontend
-- `npm run clean`: remove `dist` (cross-platform)
-- `npm run lint`: TypeScript typecheck
-- `npm run test`: run automated tests
+---
 
-## Notes
+## 🛠️ Main Tech Stack
+- **Frontend**: React 19, Tailwind CSS 4, Motion, Lucide
+- **Backend**: Express (Node.js), TypeScript (TSX)
+- **Database**: SQLite (better-sqlite3)
+- **Validation**: Zod
+- **Authentication**: JWT & Bcrypt
 
-- Messaging conversations endpoint is available at `GET /api/messages/conversations`.
-- Auth uses HttpOnly cookies (`access_token`, `refresh_token`) and credentialed requests (`credentials: 'include'`).
+---
+
+## 🧪 Testing
+Run the test suite using Vitest:
+```bash
+npm test
+```
+
+---
+
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+  <img width="1200" height="475" alt="LingkodHub Banner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/501447ca-f7fc-4ee2-a094-2a88b690a67d
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`

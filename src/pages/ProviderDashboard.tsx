@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
-import { 
-  Sidebar, 
-  TopBar, 
-  ProfileSettings, 
-  ProviderHomeDashboard, 
-  BrowseJobsSection, 
-  MyOffersSection, 
-  ProviderActiveWorkSection, 
-  EarningsSection,
-  HistorySection,
-  ProviderHelpSection
-} from '../components/DashboardLayout';
+import { Sidebar } from '../components/dashboard/shared/Sidebar';
+import { TopBar } from '../components/dashboard/shared/TopBar';
+import { ProviderProfileSettings } from '../components/dashboard/provider/ProviderProfileSettings';
+
+import { HistorySection } from '../components/dashboard/shared/HistorySection';
+
+import { ProviderHomeDashboard, BrowseJobsSection } from '../components/dashboard/provider/ProviderHomeDashboard';
+import { ProviderBidsSection as MyOffersSection } from '../components/dashboard/provider/ProviderBidsSection';
+import { ProviderOngoingTasksSection as ProviderActiveWorkSection } from '../components/dashboard/provider/ProviderOngoingTasksSection';
+import { EarningsSection } from '../components/dashboard/provider/EarningsSection';
+import { HelpSection } from '../components/dashboard/shared/HelpSection';
+
 
 export default function ProviderDashboard() {
   const [activeTab, setActiveTab] = useState('home');
@@ -27,6 +27,14 @@ export default function ProviderDashboard() {
       document.documentElement.classList.remove('dark');
     };
   }, [isDark]);
+
+  useEffect(() => {
+    const handleTabChange = (e: any) => {
+      if (e.detail) setActiveTab(e.detail);
+    };
+    window.addEventListener('change-tab', handleTabChange);
+    return () => window.removeEventListener('change-tab', handleTabChange);
+  }, []);
 
   return (
     <div className={`min-h-screen bg-brand-surface font-sans flex text-left`}>
@@ -47,12 +55,13 @@ export default function ProviderDashboard() {
           ) : activeTab === 'earnings' ? (
             <EarningsSection />
           ) : activeTab === 'help' ? (
-            <ProviderHelpSection />
+            <HelpSection />
           ) : activeTab === 'history' ? (
             <HistorySection />
           ) : activeTab === 'profile' ? (
-            <ProfileSettings role="provider" />
+            <ProviderProfileSettings />
           ) : (
+
             <div className="flex flex-col items-center justify-center min-h-[calc(100vh-144px)] text-brand-text-variant">
               <div className="w-24 h-24 bg-brand-surface-card border border-brand-outline rounded-full flex items-center justify-center mb-6 shadow-sm">
                 <div className="text-4xl">🚧</div>

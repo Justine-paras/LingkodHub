@@ -272,34 +272,42 @@ export default function ServicesPage() {
     setSearchParams(newParams);
   };
 
+  const [providers, setProviders] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const q = searchParams.get('q') || '';
+    const category = searchParams.get('category') || 'all';
+    const loc = searchParams.get('location') || '';
+    
+    setIsLoading(true);
+    api.getProviders({ q, location: loc, service: category !== 'all' ? category : undefined })
+      .then(data => setProviders(data))
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, [searchParams]);
+
   const filteredOffers = useMemo(() => {
-    return SERVICE_OFFERS.filter(offer => {
-      const matchesCategory = activeCategory === 'all' || offer.category === activeCategory;
-      const lowerQuery = searchQuery.toLowerCase();
-      const matchesName = offer.name.toLowerCase().includes(lowerQuery);
-      const matchesProvider = offer.provider.toLowerCase().includes(lowerQuery);
-      const matchesTags = (offer as any).tags?.some((tag: string) => tag.toLowerCase().includes(lowerQuery));
-      const matchesLocation = !filters.location || (offer as any).location === filters.location;
+    // Local filtering for rating and budget on the fetched providers
+    return providers.filter(provider => {
+      // Location and Q are already handled by the API, but category might need local refinement if it's an ID
       
-      // Rating filter
+      // Rating filter (providers don't have a direct rating yet in this mock-to-real transition, 
+      // but we'll assume 5.0 for now or skip if not available)
       let matchesRating = true;
       if (filters.rating && filters.rating !== 'All') {
         const minRating = parseFloat(filters.rating);
-        matchesRating = offer.rating >= minRating;
+        matchesRating = (provider.rating || 5.0) >= minRating;
       }
 
-      // Budget filter
+      // Budget filter (providers don't have a fixed price in the search results usually, 
+      // but for consistency with the old UI we'll show them)
       let matchesBudget = true;
-      if (filters.budget) {
-        const price = parseInt(offer.price.replace(/[^\d]/g, ''), 10);
-        if (filters.budget === 'b1') matchesBudget = price <= 1000;
-        else if (filters.budget === 'b2') matchesBudget = price > 1000 && price <= 3000;
-        else if (filters.budget === 'b3') matchesBudget = price > 3000;
-      }
+      // In a real app, providers might have an hourly rate.
       
-      return matchesCategory && (matchesName || matchesProvider || matchesTags) && matchesLocation && matchesRating && matchesBudget;
+      return matchesRating && matchesBudget;
     });
-  }, [activeCategory, searchQuery, filters]);
+  }, [providers, filters]);
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
@@ -469,51 +477,48 @@ export default function ServicesPage() {
                     className="group bg-white rounded-3xl border border-gray-100 overflow-hidden hover:shadow-2xl hover:shadow-gray-200/50 hover:-translate-y-1 transition-all cursor-pointer flex flex-col"
                   >
                     <div className="h-48 relative overflow-hidden">
-                      <img src={offer.img} alt={offer.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <img src={offer.avatar_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt={offer.full_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div className="absolute top-4 right-4 flex flex-col gap-2">
                         <div className="bg-white/95 backdrop-blur shadow-sm px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 ring-1 ring-black/5">
                           <Star size={12} className="text-yellow-400 fill-yellow-400" />
-                          {offer.rating}
+                          {offer.rating || 5.0}
                         </div>
-                      </div>
-                      <div className="absolute bottom-4 left-4">
-                        <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest ring-1 ring-white/20">
-                          {CATEGORIES.find(c => c.id === offer.category)?.title}
-                        </span>
                       </div>
                     </div>
 
                     <div className="p-6 flex-1 flex flex-col">
                       <div className="flex items-start justify-between mb-3">
                         <h3 className="font-bold text-gray-900 group-hover:text-[#22C55E] transition-colors leading-snug flex-1 pr-4">
-                          {offer.name}
+                          {offer.full_name}
                         </h3>
-                        {offer.isVerified && <ShieldCheck size={20} className="text-blue-500 fill-blue-50 flex-shrink-0" title="Verified Provider" />}
+                        {offer.is_documents_verified === 1 && <ShieldCheck size={20} className="text-blue-500 fill-blue-50 flex-shrink-0" title="Verified Provider" />}
                       </div>
 
                       <div className="flex flex-wrap gap-1.5 mb-4">
-                        {(offer as any).tags?.slice(0, 3).map((tag: string) => (
+                        {offer.services?.split(', ').slice(0, 3).map((tag: string) => (
                           <span key={tag} className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                            #{tag}
+                            {tag}
                           </span>
                         ))}
                       </div>
 
                       <div className="flex items-center gap-2 mb-4 text-xs text-gray-500">
-                        <span className="font-medium text-gray-700">{offer.provider}</span>
-                        <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                         <span className="flex items-center gap-1">
                           <MapPin size={12} className="text-gray-400" />
-                          {(offer as any).location}
+                          {offer.location || 'Anywhere'}
                         </span>
                       </div>
 
+                      <p className="text-xs text-gray-500 line-clamp-2 mb-6 italic">
+                        "{offer.about_me || 'No bio provided.'}"
+                      </p>
+
                       <div className="mt-auto pt-6 border-t border-gray-50 flex items-center justify-between">
                         <div>
-                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Starting at</p>
+                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Rating</p>
                           <div className="flex items-baseline gap-1">
-                            <span className="text-2xl font-black text-gray-900">{offer.price}</span>
-                            <span className="text-xs text-gray-400 font-medium lowercase">/ {offer.unit}</span>
+                            <span className="text-2xl font-black text-gray-900">{offer.rating || 5.0}</span>
+                            <span className="text-xs text-gray-400 font-medium">/ 5.0</span>
                           </div>
                         </div>
                         <button className="w-12 h-12 bg-gray-900 text-white rounded-2xl flex items-center justify-center transform group-hover:scale-110 group-hover:bg-[#22C55E] transition-all shadow-lg shadow-gray-200">

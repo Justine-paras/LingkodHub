@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import db from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
+import { upload } from '../middleware/upload.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
@@ -10,11 +11,11 @@ const router = Router();
 
 const updateMeSchema = z.object({
   full_name:  z.string().min(2).max(100).optional(),
-  username:   z.string().max(50).optional(),
-  avatar_url: z.string().url().optional().or(z.literal('')),
+  avatar_url: z.string().optional().or(z.literal('')),
   phone:      z.string().max(30).optional(),
   location:   z.string().max(150).optional(),
   about_me:   z.string().max(500).optional(),
+  service_radius: z.number().int().min(1).max(100).optional(),
 });
 
 const updateServicesSchema = z.object({
@@ -25,24 +26,36 @@ const updateServicesSchema = z.object({
 
 router.get('/me', authenticateToken, (req: AuthRequest, res: Response) => {
   const user = db.prepare(
-    'SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, created_at FROM users WHERE id = ?'
+    'SELECT id, role, full_name, avatar_url, email, phone, location, about_me, payment_method, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, created_at FROM users WHERE id = ?'
   ).get(req.user!.id);
   if (!user) { res.status(404).json({ error: 'User not found.' }); return; }
   res.json(user);
 });
+ 
+router.post('/me/avatar', authenticateToken, upload.single('avatar'), (req: AuthRequest, res: Response) => {
+  if (!req.file) {
+    res.status(400).json({ error: 'No file uploaded' });
+    return;
+  }
+ 
+  const avatarUrl = `/uploads/${req.file.filename}`;
+  db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').run(avatarUrl, req.user!.id);
+ 
+  res.json({ avatar_url: avatarUrl });
+});
 
 router.put('/me', authenticateToken, validate(updateMeSchema), (req: AuthRequest, res: Response) => {
-  const { full_name, username, avatar_url, phone, location, about_me } = req.body;
+  const { full_name, avatar_url, phone, location, about_me, service_radius } = req.body;
 
   const updates: string[] = [];
   const params: any[]     = [];
 
   if (full_name  !== undefined) { updates.push('full_name = ?');  params.push(full_name); }
-  if (username   !== undefined) { updates.push('username = ?');   params.push(username); }
   if (avatar_url !== undefined) { updates.push('avatar_url = ?'); params.push(avatar_url); }
   if (phone      !== undefined) { updates.push('phone = ?');      params.push(phone); }
   if (location   !== undefined) { updates.push('location = ?');   params.push(location); }
   if (about_me   !== undefined) { updates.push('about_me = ?');   params.push(about_me); }
+  if (service_radius !== undefined) { updates.push('service_radius = ?'); params.push(service_radius); }
 
   if (updates.length > 0) {
     params.push(req.user!.id);
@@ -50,7 +63,7 @@ router.put('/me', authenticateToken, validate(updateMeSchema), (req: AuthRequest
   }
 
   res.json(db.prepare(
-    'SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, created_at FROM users WHERE id = ?'
+    'SELECT id, role, full_name, avatar_url, email, phone, location, about_me, payment_method, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, created_at FROM users WHERE id = ?'
   ).get(req.user!.id));
 });
 
@@ -105,13 +118,28 @@ router.get('/me/applications', authenticateToken, (req: AuthRequest, res: Respon
     SELECT a.*,
       j.title, j.description, j.location AS job_location,
       j.budget, j.payment_method, j.status AS job_status,
-      c.full_name AS client_name, c.avatar_url AS client_avatar
+      c.full_name AS client_name, c.avatar_url AS client_avatar, c.phone AS client_phone
     FROM applications a
     JOIN jobs j ON a.job_id = j.id
     JOIN users c ON j.client_id = c.id
     WHERE a.provider_id = ?
     ORDER BY a.created_at DESC
   `).all(req.user!.id));
+});
+
+router.post('/me/documents', authenticateToken, upload.single('document'), (req: AuthRequest, res: Response) => {
+  if (!req.file) {
+    res.status(400).json({ error: 'No file uploaded' });
+    return;
+  }
+ 
+  const docUrl = `/uploads/${req.file.filename}`;
+  db.prepare('UPDATE users SET verification_document_url = ?, document_status = "pending" WHERE id = ?').run(docUrl, req.user!.id);
+ 
+  db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)')
+    .run(req.user!.id, 'Documents Submitted', 'Your identity documents have been submitted and are under review.', 'info');
+
+  res.json({ document_url: docUrl, status: 'pending' });
 });
 
 export default router;

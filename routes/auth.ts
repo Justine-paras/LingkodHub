@@ -7,6 +7,7 @@ import { z } from 'zod';
 import db from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
+import { sendOTPEmail } from '../services/email.js';
 
 const router = Router();
 
@@ -76,7 +77,6 @@ function revokeRefreshToken(token: string, replacedByToken?: string) {
 const registerSchema = z.object({
   role: z.enum(['client', 'provider']),
   full_name: z.string().min(2).max(100),
-  username: z.string().max(50).optional(),
   avatar_url: z.string().url().optional().or(z.literal('')),
   email: z.string().email(),
   password: z.string().min(8).max(128),
@@ -109,18 +109,18 @@ const authLimiter = rateLimit({
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 router.post('/register', authLimiter, validate(registerSchema), (req: Request, res: Response) => {
-  const { role, full_name, username, avatar_url, email, password, phone, location, about_me, payment_method } = req.body;
+  const { role, full_name, avatar_url, email, password, phone, location, about_me, payment_method } = req.body;
 
   try {
     const password_hash = bcrypt.hashSync(password, 10);
     const result = db.prepare(`
-      INSERT INTO users (role, full_name, username, avatar_url, email, password_hash, phone, location, about_me, payment_method)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(role, full_name, username || '', avatar_url || '', email,
+      INSERT INTO users (role, full_name, avatar_url, email, password_hash, phone, location, about_me, payment_method)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(role, full_name, avatar_url || '', email,
            password_hash, phone || '', location || '', about_me || '', payment_method || 'none');
 
     const user = db.prepare(
-      'SELECT id, role, full_name, username, avatar_url, email, payment_method FROM users WHERE id = ?'
+      'SELECT id, role, full_name, avatar_url, email, payment_method FROM users WHERE id = ?'
     ).get(result.lastInsertRowid) as any;
 
     const token = signAccessToken(user.id, user.role);
@@ -203,6 +203,45 @@ router.post('/change-password', authenticateToken, validate(changePasswordSchema
     .run(req.user!.id);
   clearAuthCookies(res);
   res.json({ success: true });
+});
+
+router.post('/send-otp', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins
+
+  const user = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user!.id) as any;
+  if (!user) {
+    res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+
+  db.prepare('UPDATE users SET otp = ?, otp_expires_at = ? WHERE id = ?')
+    .run(otp, expiresAt, req.user!.id);
+
+  try {
+    await sendOTPEmail(user.email, otp);
+    res.json({ success: true, message: 'OTP sent successfully.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/verify-otp', authenticateToken, (req: AuthRequest, res: Response) => {
+  const { otp } = req.body;
+  const user = db.prepare('SELECT otp, otp_expires_at FROM users WHERE id = ?').get(req.user!.id) as any;
+
+  if (!user || user.otp !== otp || new Date(user.otp_expires_at) < new Date()) {
+    res.status(400).json({ error: 'Invalid or expired OTP.' });
+    return;
+  }
+
+  db.prepare('UPDATE users SET is_email_verified = 1, otp = NULL, otp_expires_at = NULL WHERE id = ?')
+    .run(req.user!.id);
+
+  db.prepare('INSERT INTO notifications (user_id, type, title, body) VALUES (?, ?, ?, ?)')
+    .run(req.user!.id, 'success', 'Email Verified', 'Your email address has been successfully verified.');
+
+  res.json({ success: true, message: 'Email verified successfully.' });
 });
 
 export default router;

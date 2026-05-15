@@ -4,36 +4,45 @@ import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
-// Get my notifications (latest 50, unread first)
+// Get all notifications for the current user
 router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
-  const rows = db.prepare(`
-    SELECT * FROM notifications
-    WHERE user_id = ?
-    ORDER BY is_read ASC, created_at DESC
+  const notifications = db.prepare(`
+    SELECT id, user_id, title, body AS message, type, is_read, reference_id, created_at FROM notifications 
+    WHERE user_id = ? 
+    ORDER BY created_at DESC 
     LIMIT 50
   `).all(req.user!.id);
-
-  const unread = db.prepare(
-    'SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0'
-  ).get(req.user!.id) as any;
-
-  res.json({ notifications: rows, unread_count: unread.count });
+  
+  const unreadCount = db.prepare('SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0')
+    .get(req.user!.id) as { count: number };
+  
+  res.json({ 
+    notifications, 
+    unread_count: unreadCount.count 
+  });
 });
 
-// Mark all as read — must be defined BEFORE /:id/read to avoid route conflicts
-router.put('/read-all', authenticateToken, (req: AuthRequest, res: Response) => {
-  const info = db.prepare(
-    'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0'
-  ).run(req.user!.id);
-  res.json({ marked: info.changes });
-});
-
-// Mark single notification as read
+// Mark a notification as read
 router.put('/:id/read', authenticateToken, (req: AuthRequest, res: Response) => {
-  const n = db.prepare('SELECT * FROM notifications WHERE id = ? AND user_id = ?')
-    .get(req.params.id, req.user!.id) as any;
-  if (!n) { res.status(404).json({ error: 'Notification not found.' }); return; }
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ?').run(req.params.id);
+  db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?')
+    .run(req.params.id, req.user!.id);
+    
+  res.json({ success: true });
+});
+
+// Mark all as read
+router.put('/read-all', authenticateToken, (req: AuthRequest, res: Response) => {
+  db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?')
+    .run(req.user!.id);
+    
+  res.json({ success: true });
+});
+
+// Delete a notification
+router.delete('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
+  db.prepare('DELETE FROM notifications WHERE id = ? AND user_id = ?')
+    .run(req.params.id, req.user!.id);
+    
   res.json({ success: true });
 });
 

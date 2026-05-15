@@ -17,7 +17,6 @@ export function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       role TEXT NOT NULL CHECK(role IN ('client', 'provider')),
       full_name TEXT NOT NULL,
-      username TEXT,
       avatar_url TEXT,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
@@ -113,6 +112,20 @@ export function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS job_invites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL,
+      provider_id INTEGER NOT NULL,
+      client_id INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected', 'cancelled')),
+      message TEXT,
+      offered_price REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+      FOREIGN KEY (provider_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // ── Safe Migrations ─────────────────────────────────────────────────────────
@@ -131,7 +144,35 @@ export function initDb() {
     console.log('[db] Migration: added applications.message');
   }
 
-  // Seed the database if empty
+  const userCols = (db.prepare('PRAGMA table_info(users)').all() as any[]).map(c => c.name);
+  if (!userCols.includes('service_radius')) {
+    db.exec('ALTER TABLE users ADD COLUMN service_radius INTEGER DEFAULT 15');
+    console.log('[db] Migration: added users.service_radius');
+  }
+
+  if (!userCols.includes('is_email_verified')) {
+    db.exec('ALTER TABLE users ADD COLUMN is_email_verified INTEGER DEFAULT 0');
+    console.log('[db] Migration: added users.is_email_verified');
+  }
+
+  if (!userCols.includes('is_documents_verified')) {
+    db.exec('ALTER TABLE users ADD COLUMN is_documents_verified INTEGER DEFAULT 0');
+    console.log('[db] Migration: added users.is_documents_verified');
+  }
+
+  if (!userCols.includes('otp')) {
+    db.exec('ALTER TABLE users ADD COLUMN otp TEXT');
+    db.exec('ALTER TABLE users ADD COLUMN otp_expires_at DATETIME');
+    console.log('[db] Migration: added users.otp columns');
+  }
+
+  if (!userCols.includes('document_status')) {
+    db.exec('ALTER TABLE users ADD COLUMN document_status TEXT DEFAULT "none"');
+    db.exec('ALTER TABLE users ADD COLUMN verification_document_url TEXT');
+    console.log('[db] Migration: added users.document_status columns');
+  }
+
+
   const usersCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
   if (usersCount.count === 0) {
     seedDatabase();
@@ -139,33 +180,15 @@ export function initDb() {
 }
 
 function seedDatabase() {
-  const insertUser = db.prepare(`
-    INSERT INTO users (role, full_name, username, avatar_url, email, password_hash, phone, location, about_me) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  // Default password "password123" for seed users
-  const defaultHash = bcrypt.hashSync('password123', 10);
-
-  insertUser.run('client', 'Juan Dela Cruz', 'juan_dc', 'https://api.dicebear.com/7.x/notionists/svg?seed=Juan', 'juan.delacruz@example.com', defaultHash, '+63 912 345 6789', 'Makati City, Metro Manila', 'Homeowner looking for reliable local services for property maintenance and occasional errands.');
-  insertUser.run('provider', 'Maria Santos', 'maria.santos', 'https://api.dicebear.com/7.x/notionists/svg?seed=Maria', 'maria.santos@example.com', defaultHash, '+63 998 765 4321', 'Quezon City, Metro Manila', 'Professional service provider with 5+ years of experience in residential maintenance and cleaning.');
-
   const insertService = db.prepare('INSERT INTO services (name) VALUES (?)');
-  const services = ['General Cleaning', 'Aircon Cleaning', 'Plumbing Repair', 'Electrical Help', 'Carpentry', 'Errands'];
-  services.forEach(service => insertService.run(service));
-
-  const insertProviderService = db.prepare('INSERT INTO provider_services (provider_id, service_id) VALUES (?, ?)');
-  insertProviderService.run(2, 1); // Maria - General Cleaning
-  insertProviderService.run(2, 2); // Maria - Aircon Cleaning
-  insertProviderService.run(2, 3); // Maria - Plumbing Repair
-
-  const insertJob = db.prepare(`
-    INSERT INTO jobs (client_id, title, description, location, budget, is_negotiable, payment_method, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  
-  insertJob.run(1, 'Need Help Fixing Kitchen Sink', 'The pipe under the kitchen sink is leaking heavily. Need someone to fix or replace it today.', 'Makati City', 800, 1, 'cash', 'pending');
-  insertJob.run(1, 'General Home Cleaning', 'Need a thorough cleaning of a 2-bedroom apartment. Cleaning supplies will be provided.', 'BGC, Taguig', 1200, 0, 'GCash', 'pending');
+  const services = ['General Cleaning', 'Aircon Cleaning', 'Plumbing Repair', 'Electrical Help', 'Carpentry', 'Errands', 'Tutoring', 'Delivery'];
+  services.forEach(service => {
+    try {
+      insertService.run(service);
+    } catch (e) {
+      // Ignore duplicates
+    }
+  });
 }
 
 // ─── Notification Helper ──────────────────────────────────────────────────────

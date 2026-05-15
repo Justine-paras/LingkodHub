@@ -7,6 +7,21 @@ export const api = {
     };
   },
 
+  async safeJson(response: Response, errorMessage: string) {
+    const text = await response.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (e) {
+      throw new Error(text || errorMessage);
+    }
+    
+    if (!response.ok) {
+      throw new Error(data?.error || data?.message || text || errorMessage);
+    }
+    return data;
+  },
+
   // ─── Token Refresh & Auth-Aware Fetch ────────────────────────────────────
 
   /**
@@ -56,9 +71,7 @@ export const api = {
       body: JSON.stringify({ email, password }),
       credentials: 'include',
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Login failed');
-    return data;
+    return this.safeJson(response, 'Login failed');
   },
 
   async register(data: any) {
@@ -68,9 +81,7 @@ export const api = {
       body: JSON.stringify(data),
       credentials: 'include',
     });
-    const resData = await response.json();
-    if (!response.ok) throw new Error(resData.error || 'Registration failed');
-    return resData;
+    return this.safeJson(response, 'Registration failed');
   },
 
   async logout() {
@@ -86,8 +97,23 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     });
+    return this.safeJson(response, 'Failed to change password');
+  },
+  
+  async sendOTP() {
+    const response = await this.authFetch(`${API_BASE}/auth/send-otp`, { method: 'POST' });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to change password');
+    if (!response.ok) throw new Error(data.error || 'Failed to send OTP');
+    return data;
+  },
+
+  async verifyOTP(otp: string) {
+    const response = await this.authFetch(`${API_BASE}/auth/verify-otp`, {
+      method: 'POST',
+      body: JSON.stringify({ otp }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to verify OTP');
     return data;
   },
 
@@ -102,11 +128,11 @@ export const api = {
 
   async updateMe(data: {
     full_name?: string;
-    username?: string;
     avatar_url?: string;
     phone?: string;
     location?: string;
     about_me?: string;
+    service_radius?: number;
   }) {
     const response = await this.authFetch(`${API_BASE}/me`, {
       method: 'PUT',
@@ -115,6 +141,32 @@ export const api = {
     const resData = await response.json();
     if (!response.ok) throw new Error(resData.error || 'Failed to update user');
     return resData;
+  },
+
+  async uploadAvatar(file: File) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const response = await fetch(`${API_BASE}/me/avatar`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Upload failed');
+    return data;
+  },
+
+  async uploadDocuments(file: File) {
+    const formData = new FormData();
+    formData.append('document', file);
+    const response = await fetch(`${API_BASE}/me/documents`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Document upload failed');
+    return data;
   },
 
   // ─── Services ─────────────────────────────────────────────────────────────
@@ -233,6 +285,15 @@ export const api = {
     return data;
   },
 
+  async deleteApplication(applicationId: number) {
+    const response = await this.authFetch(`${API_BASE}/applications/${applicationId}`, {
+      method: 'DELETE',
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to delete application');
+    return data;
+  },
+
   async getMyApplications() {
     const response = await this.authFetch(`${API_BASE}/me/applications`);
     const data = await response.json();
@@ -299,23 +360,17 @@ export const api = {
 
   async getNotifications() {
     const response = await this.authFetch(`${API_BASE}/notifications`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch notifications');
-    return data; // { notifications: [], unread_count: number }
+    return this.safeJson(response, 'Failed to fetch notifications');
   },
 
   async markNotificationRead(id: number) {
     const response = await this.authFetch(`${API_BASE}/notifications/${id}/read`, { method: 'PUT' });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to mark notification');
-    return data;
+    return this.safeJson(response, 'Failed to mark notification');
   },
 
   async markAllNotificationsRead() {
     const response = await this.authFetch(`${API_BASE}/notifications/read-all`, { method: 'PUT' });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to mark all notifications');
-    return data;
+    return this.safeJson(response, 'Failed to mark all notifications');
   },
 
   // ─── Reviews ───────────────────────────────────────────────────────────────
@@ -325,16 +380,53 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ rating, comment }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to submit review');
-    return data;
+    return this.safeJson(response, 'Failed to submit review');
   },
 
   async getUserReviews(userId: number) {
     const response = await this.authFetch(`${API_BASE}/users/${userId}/reviews`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch reviews');
-    return data; // { reviews: [], avg_rating: number, total_reviews: number }
+    return this.safeJson(response, 'Failed to fetch reviews');
+  },
+
+  // ─── Support ───────────────────────────────────────────────────────────────
+
+  async contactSupport(subject: string, message: string) {
+    const response = await this.authFetch(`${API_BASE}/support/contact`, {
+      method: 'POST',
+      body: JSON.stringify({ subject, message }),
+    });
+    return this.safeJson(response, 'Failed to send support request');
+  },
+
+  async reportIssue(type: string, description: string) {
+    const response = await this.authFetch(`${API_BASE}/support/report`, {
+      method: 'POST',
+      body: JSON.stringify({ type, description }),
+    });
+    return this.safeJson(response, 'Failed to submit report');
+  },
+
+  // ─── Invites ───────────────────────────────────────────────────────────────
+
+  async getInvites() {
+    const response = await this.authFetch(`${API_BASE}/invites`);
+    return this.safeJson(response, 'Failed to fetch invites');
+  },
+
+  async sendInvite(invite: { job_id: number, provider_id: number, message?: string, offered_price?: number }) {
+    const response = await this.authFetch(`${API_BASE}/invites`, {
+      method: 'POST',
+      body: JSON.stringify(invite),
+    });
+    return this.safeJson(response, 'Failed to send invite');
+  },
+
+  async updateInviteStatus(inviteId: number, status: 'accepted' | 'rejected' | 'cancelled') {
+    const response = await this.authFetch(`${API_BASE}/invites/${inviteId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return this.safeJson(response, 'Failed to update invite status');
   },
 };
 

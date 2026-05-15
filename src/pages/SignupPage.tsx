@@ -37,8 +37,8 @@ export default function SignupPage() {
   const [formData, setFormData] = React.useState({
     firstName: '',
     lastName: '',
-    username: '',
     avatarUrl: '',
+    avatarFile: null as File | null,
     aboutMe: '',
     email: '',
     password: '',
@@ -70,7 +70,6 @@ export default function SignupPage() {
       await api.register({
         role: accountType,
         full_name: `${formData.firstName} ${formData.lastName}`,
-        username: formData.username,
         avatar_url: formData.avatarUrl,
         email: formData.email,
         password: formData.password,
@@ -79,6 +78,10 @@ export default function SignupPage() {
         about_me: formData.aboutMe || '',
         payment_method: formData.paymentMethod || 'none'
       });
+
+      if (formData.avatarFile) {
+        await api.uploadAvatar(formData.avatarFile);
+      }
       
       if (accountType === 'provider' && formData.services && formData.services.length > 0) {
         await api.updateMyServices(formData.services);
@@ -513,6 +516,49 @@ export default function SignupPage() {
                                 className="w-full pl-12 pr-4 py-4 bg-brand-surface-card border border-brand-outline rounded-2xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 transition-all text-sm font-medium" 
                               />
                             </div>
+                            
+                            {/* Password Strength Meter */}
+                            {formData.password && (
+                              <div className="px-1 pt-1">
+                                <div className="flex justify-between items-center mb-2">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-variant">Strength</span>
+                                  <span className={`text-[10px] font-extrabold uppercase tracking-widest ${
+                                    formData.password.length < 8 ? 'text-red-500' : 
+                                    formData.password.length < 10 ? 'text-orange-500' : 
+                                    'text-brand-primary'
+                                  }`}>
+                                    {(() => {
+                                      const s = formData.password.length;
+                                      if (s === 0) return '';
+                                      if (s < 6) return 'Very Weak';
+                                      if (s < 8) return 'Weak';
+                                      if (s < 12) return 'Fair';
+                                      if (s < 16) return 'Good';
+                                      return 'Strong';
+                                    })()}
+                                  </span>
+                                </div>
+                                <div className="flex gap-1 h-1.5">
+                                  {[1, 2, 3, 4, 5].map((i) => (
+                                    <motion.div
+                                      key={i}
+                                      initial={{ scaleX: 0 }}
+                                      animate={{ 
+                                        scaleX: 1,
+                                        backgroundColor: 
+                                          formData.password.length >= i * 3 ? '#22C55E' : 
+                                          formData.password.length >= i * 2 ? '#EAB308' : 
+                                          formData.password.length > 0 ? '#EF4444' : '#E5E7EB'
+                                      }}
+                                      className="flex-1 rounded-full h-full bg-brand-outline transition-colors duration-500"
+                                    />
+                                  ))}
+                                </div>
+                                <p className="text-[9px] text-brand-text-variant mt-2 leading-relaxed">
+                                  Use 8+ characters with a mix of letters, numbers & symbols.
+                                </p>
+                              </div>
+                            )}
                           </div>
 
                           {accountType === 'client' && (
@@ -572,29 +618,20 @@ export default function SignupPage() {
                                 type="file" 
                                 className="absolute inset-0 opacity-0 cursor-pointer" 
                                 onChange={(e) => {
-                                  // Mock uploading by just setting a dicebear avatar or object url
-                                  if (e.target.files?.[0]) {
-                                    setFormData({...formData, avatarUrl: URL.createObjectURL(e.target.files[0])});
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    setFormData({
+                                      ...formData, 
+                                      avatarFile: file,
+                                      avatarUrl: URL.createObjectURL(file)
+                                    });
                                   }
                                 }}
                               />
                             </div>
                             <span className="text-xs font-medium text-brand-text-variant">Upload Profile Picture</span>
                           </div>
-                          <div className="space-y-2">
-                            <label className="text-xs font-bold text-brand-text-main ml-1 uppercase tracking-widest">Username</label>
-                            <div className="relative">
-                              <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-variant" />
-                              <input 
-                                type="text" 
-                                required
-                                value={formData.username}
-                                onChange={e => setFormData({...formData, username: e.target.value})}
-                                placeholder="juandelacruz99"
-                                className="w-full pl-12 pr-4 py-4 bg-brand-surface-card border border-brand-outline rounded-2xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 transition-all text-sm font-medium" 
-                              />
-                            </div>
-                          </div>
+
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-brand-text-main ml-1 uppercase tracking-widest">Phone Number</label>
                             <div className="relative">
@@ -643,7 +680,6 @@ export default function SignupPage() {
                           <button 
                             type="button" 
                             onClick={nextStep}
-                            disabled={!formData.username}
                             className="flex-[2] py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                           >
                             Next: Payment Method <ChevronRight size={18} />
@@ -709,21 +745,34 @@ export default function SignupPage() {
                           </label>
                         </div>
 
-                        <div className="flex gap-4">
-                          <button 
-                            type="button" 
-                            onClick={prevStep}
-                            className="flex-1 py-4 bg-brand-surface border border-brand-outline text-brand-text-main font-bold rounded-2xl hover:bg-brand-surface-card transition-all flex items-center justify-center gap-2"
-                          >
-                            <ChevronLeft size={18} /> Back
-                          </button>
+                        <div className="flex flex-col gap-3">
                           <button 
                             type="button" 
                             onClick={handleSignup}
-                            className="flex-[2] py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all flex items-center justify-center gap-2"
+                            className="w-full py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all flex items-center justify-center gap-2"
                           >
                             Complete Registration <ChevronRight size={18} />
                           </button>
+                          
+                          <div className="flex gap-4">
+                            <button 
+                              type="button" 
+                              onClick={prevStep}
+                              className="flex-1 py-3 bg-brand-surface border border-brand-outline text-brand-text-variant text-xs font-bold rounded-xl hover:bg-brand-surface-card transition-all"
+                            >
+                              Back
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                setFormData({...formData, paymentMethod: 'later'});
+                                handleSignup(new Event('submit') as any);
+                              }}
+                              className="flex-1 py-3 text-brand-primary text-xs font-bold rounded-xl hover:bg-brand-primary/5 transition-all"
+                            >
+                              Skip for now
+                            </button>
+                          </div>
                         </div>
                       </motion.div>
                     )}

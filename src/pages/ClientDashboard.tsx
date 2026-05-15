@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Sidebar, TopBar, ProfileSettings, HomeDashboard, ActivePostsSection, HistorySection, OngoingTasksSection } from '../components/DashboardLayout';
+import { Sidebar } from '../components/dashboard/shared/Sidebar';
+import { TopBar } from '../components/dashboard/shared/TopBar';
+import { ClientProfileSettings } from '../components/dashboard/client/ClientProfileSettings';
+import { HelpSection } from '../components/dashboard/shared/HelpSection';
+
+import { HistorySection } from '../components/dashboard/shared/HistorySection';
+
+import { HomeDashboard } from '../components/dashboard/client/HomeDashboard';
+import { ActivePostsSection } from '../components/dashboard/client/ActivePostsSection';
+import { OngoingTasksSection } from '../components/dashboard/client/OngoingTasksSection';
+
 
 export default function ClientDashboard() {
   const [activeTab, setActiveTab] = useState('home');
@@ -18,6 +28,14 @@ export default function ClientDashboard() {
     };
   }, [isDark]);
 
+  useEffect(() => {
+    const handleTabChange = (e: any) => {
+      if (e.detail) setActiveTab(e.detail);
+    };
+    window.addEventListener('change-tab', handleTabChange);
+    return () => window.removeEventListener('change-tab', handleTabChange);
+  }, []);
+
   return (
     <div className={`min-h-screen bg-brand-surface font-sans selection:bg-brand-primary selection:text-white flex`}>
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} role="client" />
@@ -29,13 +47,16 @@ export default function ClientDashboard() {
           {activeTab === 'home' ? (
             <HomeDashboard />
           ) : activeTab === 'profile' ? (
-            <ProfileSettings role="client" />
+            <ClientProfileSettings />
           ) : activeTab === 'jobs' ? (
+
             <ActivePostsSection />
           ) : activeTab === 'history' ? (
             <HistorySection />
           ) : activeTab === 'tasks' ? (
             <OngoingTasksSection />
+          ) : activeTab === 'help' ? (
+            <HelpSection />
           ) : (
             <div className="flex flex-col items-center justify-center h-[calc(100vh-144px)] text-brand-text-variant">
               <div className="w-24 h-24 bg-brand-surface-card border border-brand-outline rounded-full flex items-center justify-center mb-6 shadow-sm">

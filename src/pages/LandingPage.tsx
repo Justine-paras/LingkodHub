@@ -35,8 +35,10 @@ export default function LandingPage() {
             <form 
               onSubmit={(e) => {
                 e.preventDefault();
-                const query = (e.currentTarget.elements.namedItem('search') as HTMLInputElement).value;
-                navigate(`/services?q=${encodeURIComponent(query)}`);
+                const form = e.currentTarget;
+                const search = (form.elements.namedItem('search') as HTMLInputElement).value;
+                const location = (form.elements.namedItem('location') as HTMLInputElement).value;
+                navigate(`/services?q=${encodeURIComponent(search)}&location=${encodeURIComponent(location)}`);
               }}
               className="flex items-center bg-white/95 backdrop-blur-sm rounded-full p-2 w-full max-w-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] group focus-within:ring-4 focus-within:ring-[#22C55E]/20 transition-all"
             >
@@ -48,6 +50,7 @@ export default function LandingPage() {
               />
               <div className="w-px h-6 bg-gray-200 shrink-0"></div>
               <input 
+                name="location"
                 type="text" 
                 placeholder="Location" 
                 className="flex-[1] bg-transparent border-none outline-none px-6 py-4 text-sm text-gray-900 placeholder:text-gray-500 w-full hidden sm:block"

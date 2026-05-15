@@ -52,4 +52,25 @@ router.put('/:id', authenticateToken, validate(applicationDecisionSchema), (req:
   res.json(db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id));
 });
 
+// Provider withdraws an application
+router.delete('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
+  if (req.user!.role !== 'provider') {
+    res.status(403).json({ error: 'Only providers can withdraw applications.' }); return;
+  }
+
+  const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id) as any;
+  if (!application) {
+    res.status(404).json({ error: 'Application not found.' }); return;
+  }
+  if (application.provider_id !== req.user!.id) {
+    res.status(403).json({ error: 'Forbidden.' }); return;
+  }
+  if (application.status !== 'pending') {
+    res.status(400).json({ error: 'Cannot withdraw an application that is already accepted or rejected.' }); return;
+  }
+
+  db.prepare('DELETE FROM applications WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
 export default router;

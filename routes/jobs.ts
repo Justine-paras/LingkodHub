@@ -210,7 +210,7 @@ router.get('/:id/applications', authenticateToken, (req: AuthRequest, res: Respo
 
   res.json(db.prepare(`
     SELECT a.*,
-      u.full_name, u.username, u.avatar_url, u.phone, u.location, u.about_me,
+      u.full_name, u.avatar_url, u.phone, u.location, u.about_me,
       (SELECT GROUP_CONCAT(s.name, ', ')
         FROM provider_services ps JOIN services s ON ps.service_id = s.id
         WHERE ps.provider_id = u.id
