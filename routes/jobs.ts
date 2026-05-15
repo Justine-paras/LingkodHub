@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import db, { notify } from '../db.js';
-import { authenticateToken, AuthRequest } from '../middleware/auth.js';
+import { authenticateToken, requireVerified, AuthRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
@@ -14,7 +14,8 @@ const createJobSchema = z.object({
   location:       z.string().min(2).max(150),
   budget:         z.number().positive().max(1_000_000),
   is_negotiable:  z.boolean().optional().default(false),
-  payment_method: z.string().max(50).optional(),
+  payment_method: z.enum(['gcash', 'maya']).optional().default('gcash'),
+  provider_id:    z.number().optional(),
 });
 
 const updateJobStatusSchema = z.object({
@@ -94,15 +95,19 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/', authenticateToken, validate(createJobSchema), (req: AuthRequest, res: Response) => {
+router.post('/', authenticateToken, requireVerified, validate(createJobSchema), (req: AuthRequest, res: Response) => {
   if (req.user!.role !== 'client') {
     res.status(403).json({ error: 'Only clients can create jobs.' }); return;
   }
-  const { title, description, location, budget, is_negotiable, payment_method } = req.body;
+  const { title, description, location, budget, is_negotiable, payment_method, provider_id } = req.body;
   const result = db.prepare(`
-    INSERT INTO jobs (client_id, title, description, location, budget, is_negotiable, payment_method)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(req.user!.id, title, description ?? '', location, budget, is_negotiable ? 1 : 0, payment_method ?? 'cash');
+    INSERT INTO jobs (client_id, title, description, location, budget, is_negotiable, payment_method, provider_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(req.user!.id, title, description ?? '', location, budget, is_negotiable ? 1 : 0, payment_method ?? 'gcash', provider_id || null);
+
+  if (provider_id) {
+    notify(provider_id, 'job_invitation', 'New Job Invitation', `You have been invited to a new job: "${title}".`, Number(result.lastInsertRowid));
+  }
 
   res.status(201).json(db.prepare('SELECT * FROM jobs WHERE id = ?').get(result.lastInsertRowid));
 });
@@ -178,7 +183,7 @@ router.put('/:id/status', authenticateToken, validate(updateJobStatusSchema), (r
 
 // ─── Applications on a Job ────────────────────────────────────────────────────
 
-router.post('/:id/apply', authenticateToken, validate(applyToJobSchema), (req: AuthRequest, res: Response) => {
+router.post('/:id/apply', authenticateToken, requireVerified, validate(applyToJobSchema), (req: AuthRequest, res: Response) => {
   if (req.user!.role !== 'provider') {
     res.status(403).json({ error: 'Only providers can apply to jobs.' }); return;
   }
@@ -210,7 +215,7 @@ router.get('/:id/applications', authenticateToken, (req: AuthRequest, res: Respo
 
   res.json(db.prepare(`
     SELECT a.*,
-      u.full_name, u.avatar_url, u.phone, u.location, u.about_me,
+      u.full_name, u.username, u.avatar_url, u.phone, u.location, u.about_me,
       (SELECT GROUP_CONCAT(s.name, ', ')
         FROM provider_services ps JOIN services s ON ps.service_id = s.id
         WHERE ps.provider_id = u.id
@@ -224,7 +229,7 @@ router.get('/:id/applications', authenticateToken, (req: AuthRequest, res: Respo
 
 // ─── Reviews on a Job ─────────────────────────────────────────────────────────
 
-router.post('/:id/review', authenticateToken, validate(createReviewSchema), (req: AuthRequest, res: Response) => {
+router.post('/:id/review', authenticateToken, requireVerified, validate(createReviewSchema), (req: AuthRequest, res: Response) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id) as any;
   if (!job)                      { res.status(404).json({ error: 'Job not found.' }); return; }
   if (job.status !== 'completed'){ res.status(400).json({ error: 'Only completed jobs can be reviewed.' }); return; }

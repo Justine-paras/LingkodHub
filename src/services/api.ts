@@ -42,10 +42,11 @@ export const api = {
    * refresh on 401/403. If the refresh also fails, it logs the user out and
    * redirects to the login page.
    */
-  async authFetch(url: string, options: RequestInit = {}, retry = true): Promise<Response> {
+  async authFetch(url: string, options: RequestInit & { skipRedirect?: boolean } = {}, retry = true): Promise<Response> {
+    const { skipRedirect, ...fetchOptions } = options;
     const response = await fetch(url, {
-      ...options,
-      headers: { ...this.getHeaders(), ...(options.headers as Record<string, string> || {}) },
+      ...fetchOptions,
+      headers: { ...this.getHeaders(), ...(fetchOptions.headers as Record<string, string> || {}) },
       credentials: 'include',
     });
 
@@ -55,8 +56,10 @@ export const api = {
         // Retry original request with new token
         return this.authFetch(url, options, false);
       }
-      // Refresh failed — force logout
-      window.location.href = '/login';
+      // Refresh failed — force logout if not already on login/signup
+      if (!skipRedirect && window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
+        window.location.href = '/login';
+      }
     }
 
     return response;
@@ -102,9 +105,7 @@ export const api = {
   
   async sendOTP() {
     const response = await this.authFetch(`${API_BASE}/auth/send-otp`, { method: 'POST' });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to send OTP');
-    return data;
+    return this.safeJson(response, 'Failed to send OTP');
   },
 
   async verifyOTP(otp: string) {
@@ -112,35 +113,76 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ otp }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to verify OTP');
-    return data;
+    return this.safeJson(response, 'Failed to verify OTP');
   },
 
   // ─── User Profile ─────────────────────────────────────────────────────────
 
   async getMe() {
-    const response = await this.authFetch(`${API_BASE}/me`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch user');
-    return data;
+    const response = await this.authFetch(`${API_BASE}/me`, { skipRedirect: true });
+    return this.safeJson(response, 'Failed to fetch user');
   },
 
   async updateMe(data: {
     full_name?: string;
+    username?: string;
     avatar_url?: string;
     phone?: string;
     location?: string;
     about_me?: string;
     service_radius?: number;
+    pref_email_messages?: number;
+    pref_email_updates?: number;
+    pref_email_promos?: number;
+    pref_push_alerts?: number;
+    pref_push_marketing?: number;
+    is_public_profile?: number;
+    show_online_status?: number;
   }) {
     const response = await this.authFetch(`${API_BASE}/me`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
-    const resData = await response.json();
-    if (!response.ok) throw new Error(resData.error || 'Failed to update user');
-    return resData;
+    return this.safeJson(response, 'Failed to update user');
+  },
+
+  async deleteMe() {
+    const response = await this.authFetch(`${API_BASE}/me`, {
+      method: 'DELETE',
+    });
+    return this.safeJson(response, 'Failed to delete account');
+  },
+
+  async getBillingHistory() {
+    const response = await this.authFetch(`${API_BASE}/me/billing`);
+    return this.safeJson(response, 'Failed to fetch billing history');
+  },
+
+  async getAddresses() {
+    const response = await this.authFetch(`${API_BASE}/me/addresses`);
+    return this.safeJson(response, 'Failed to fetch addresses');
+  },
+
+  async addAddress(data: { label: string; address_text: string; is_default?: number }) {
+    const response = await this.authFetch(`${API_BASE}/me/addresses`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return this.safeJson(response, 'Failed to add address');
+  },
+
+  async deleteAddress(id: number) {
+    const response = await this.authFetch(`${API_BASE}/me/addresses/${id}`, {
+      method: 'DELETE',
+    });
+    return this.safeJson(response, 'Failed to delete address');
+  },
+
+  async setDefaultAddress(id: number) {
+    const response = await this.authFetch(`${API_BASE}/me/addresses/${id}/default`, {
+      method: 'PATCH',
+    });
+    return this.safeJson(response, 'Failed to set default address');
   },
 
   async uploadAvatar(file: File) {
@@ -151,9 +193,7 @@ export const api = {
       body: formData,
       credentials: 'include',
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Upload failed');
-    return data;
+    return this.safeJson(response, 'Upload failed');
   },
 
   async uploadDocuments(file: File) {
@@ -164,25 +204,19 @@ export const api = {
       body: formData,
       credentials: 'include',
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Document upload failed');
-    return data;
+    return this.safeJson(response, 'Document upload failed');
   },
 
   // ─── Services ─────────────────────────────────────────────────────────────
 
   async getServices() {
     const response = await fetch(`${API_BASE}/services`, { credentials: 'include' });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch services');
-    return data;
+    return this.safeJson(response, 'Failed to fetch services');
   },
 
   async getMyServices() {
     const response = await this.authFetch(`${API_BASE}/me/services`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch user services');
-    return data;
+    return this.safeJson(response, 'Failed to fetch user services');
   },
 
   async updateMyServices(services: string[]) {
@@ -190,9 +224,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ services }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to update user services');
-    return data;
+    return this.safeJson(response, 'Failed to update user services');
   },
 
   // ─── Jobs ─────────────────────────────────────────────────────────────────
@@ -203,16 +235,12 @@ export const api = {
     if (filters?.view)   params.set('view',   filters.view);
     const url = `${API_BASE}/jobs${params.toString() ? `?${params}` : ''}`;
     const response = await this.authFetch(url);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch jobs');
-    return data;
+    return this.safeJson(response, 'Failed to fetch jobs');
   },
 
   async getJobsByView(view: 'history' | 'ongoing' | 'assigned') {
     const response = await this.authFetch(`${API_BASE}/jobs?view=${view}`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch jobs');
-    return data;
+    return this.safeJson(response, 'Failed to fetch jobs');
   },
 
   async createJob(data: {
@@ -222,28 +250,23 @@ export const api = {
     budget: number;
     is_negotiable: boolean;
     payment_method: string;
+    provider_id?: number;
   }) {
     const response = await this.authFetch(`${API_BASE}/jobs`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    const resData = await response.json();
-    if (!response.ok) throw new Error(resData.error || 'Failed to create job');
-    return resData;
+    return this.safeJson(response, 'Failed to create job');
   },
 
   async getJob(id: number) {
     const response = await this.authFetch(`${API_BASE}/jobs/${id}`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch job');
-    return data;
+    return this.safeJson(response, 'Failed to fetch job');
   },
 
   async deleteJob(id: number) {
     const response = await this.authFetch(`${API_BASE}/jobs/${id}`, { method: 'DELETE' });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to delete job');
-    return data;
+    return this.safeJson(response, 'Failed to delete job');
   },
 
   async updateJobStatus(id: number, status: 'in_progress' | 'completed' | 'cancelled') {
@@ -251,9 +274,7 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to update job status');
-    return data;
+    return this.safeJson(response, 'Failed to update job status');
   },
 
   // ─── Applications ──────────────────────────────────────────────────────────
@@ -263,42 +284,32 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ message: message ?? '' }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to apply to job');
-    return data;
+    return this.safeJson(response, 'Failed to apply to job');
   },
 
   async getJobApplications(jobId: number) {
     const response = await this.authFetch(`${API_BASE}/jobs/${jobId}/applications`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch applications');
-    return data;
+    return this.safeJson(response, 'Failed to fetch applications');
   },
 
-  async decideApplication(applicationId: number, status: 'accepted' | 'rejected') {
+  async decideApplication(applicationId: number, status: 'accepted' | 'rejected', paymentMethod?: string) {
     const response = await this.authFetch(`${API_BASE}/applications/${applicationId}`, {
       method: 'PUT',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, payment_method: paymentMethod }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to update application');
-    return data;
+    return this.safeJson(response, 'Failed to update application');
   },
 
   async deleteApplication(applicationId: number) {
     const response = await this.authFetch(`${API_BASE}/applications/${applicationId}`, {
       method: 'DELETE',
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to delete application');
-    return data;
+    return this.safeJson(response, 'Failed to delete application');
   },
 
   async getMyApplications() {
     const response = await this.authFetch(`${API_BASE}/me/applications`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch your applications');
-    return data;
+    return this.safeJson(response, 'Failed to fetch your applications');
   },
 
   // ─── Provider Directory ────────────────────────────────────────────────────
@@ -311,32 +322,24 @@ export const api = {
 
     const url = `${API_BASE}/providers${params.toString() ? `?${params}` : ''}`;
     const response = await this.authFetch(url);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch providers');
-    return data;
+    return this.safeJson(response, 'Failed to fetch providers');
   },
 
   async getProvider(id: number) {
     const response = await this.authFetch(`${API_BASE}/providers/${id}`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch provider');
-    return data;
+    return this.safeJson(response, 'Failed to fetch provider');
   },
 
   // ─── Messaging ─────────────────────────────────────────────────────────────
 
   async getConversations() {
     const response = await this.authFetch(`${API_BASE}/messages/conversations`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch conversations');
-    return data;
+    return this.safeJson(response, 'Failed to fetch conversations');
   },
 
   async getMessages(userId: number) {
     const response = await this.authFetch(`${API_BASE}/messages/${userId}`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to fetch messages');
-    return data;
+    return this.safeJson(response, 'Failed to fetch messages');
   },
 
   async sendMessage(receiverId: number, content: string, jobId?: number) {
@@ -344,16 +347,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ receiver_id: receiverId, content, job_id: jobId }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to send message');
-    return data;
+    return this.safeJson(response, 'Failed to send message');
   },
 
   async markMessagesRead(userId: number) {
     const response = await this.authFetch(`${API_BASE}/messages/read/${userId}`, { method: 'PUT' });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to mark messages as read');
-    return data;
+    return this.safeJson(response, 'Failed to mark messages as read');
   },
 
   // ─── Notifications ─────────────────────────────────────────────────────────
@@ -404,29 +403,6 @@ export const api = {
       body: JSON.stringify({ type, description }),
     });
     return this.safeJson(response, 'Failed to submit report');
-  },
-
-  // ─── Invites ───────────────────────────────────────────────────────────────
-
-  async getInvites() {
-    const response = await this.authFetch(`${API_BASE}/invites`);
-    return this.safeJson(response, 'Failed to fetch invites');
-  },
-
-  async sendInvite(invite: { job_id: number, provider_id: number, message?: string, offered_price?: number }) {
-    const response = await this.authFetch(`${API_BASE}/invites`, {
-      method: 'POST',
-      body: JSON.stringify(invite),
-    });
-    return this.safeJson(response, 'Failed to send invite');
-  },
-
-  async updateInviteStatus(inviteId: number, status: 'accepted' | 'rejected' | 'cancelled') {
-    const response = await this.authFetch(`${API_BASE}/invites/${inviteId}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
-    });
-    return this.safeJson(response, 'Failed to update invite status');
   },
 };
 

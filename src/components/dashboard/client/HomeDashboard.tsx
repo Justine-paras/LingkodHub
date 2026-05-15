@@ -8,12 +8,11 @@ import {
   MessageSquare 
 } from 'lucide-react';
 import { api } from '../../../services/api';
-import { motion, AnimatePresence } from 'motion/react';
 
 export const HomeDashboard = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [locationQuery, setLocationQuery] = React.useState('');
+  const [locationQuery, setLocationQuery] = React.useState('Dasmariñas City');
   
   const [activeJobs, setActiveJobs] = React.useState<any[]>([]);
   const [ongoingJobs, setOngoingJobs] = React.useState<any[]>([]);
@@ -22,15 +21,15 @@ export const HomeDashboard = () => {
   const [hasSearched, setHasSearched] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState<any[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
-  const [viewProfile, setViewProfile] = React.useState<any>(null);
 
-  const [isInviting, setIsInviting] = React.useState(false);
-  const [inviteJobId, setInviteJobId] = React.useState<number | ''>('');
-  const [inviteMessage, setInviteMessage] = React.useState('');
-  const [invitePrice, setInvitePrice] = React.useState<number | ''>('');
-  const [inviteStatus, setInviteStatus] = React.useState<{type: 'success'|'error', msg: string} | null>(null);
+  const [isEmailVerified, setIsEmailVerified] = React.useState(true);
+  const [isProfileLoading, setIsProfileLoading] = React.useState(true);
 
   React.useEffect(() => {
+    api.getMe().then(user => {
+      setIsEmailVerified(!!user.is_email_verified);
+    }).catch(console.error).finally(() => setIsProfileLoading(false));
+
     Promise.all([
       api.getJobs({ status: 'pending' }),
       api.getJobs({ status: 'in_progress' })
@@ -57,32 +56,30 @@ export const HomeDashboard = () => {
     if (e.key === 'Enter') handleSearch();
   };
 
-  const handleSendInvite = async () => {
-    if (!inviteJobId || !viewProfile) return;
-    try {
-      await api.sendInvite({
-        job_id: Number(inviteJobId),
-        provider_id: viewProfile.id,
-        message: inviteMessage,
-        offered_price: invitePrice ? Number(invitePrice) : undefined
-      });
-      setInviteStatus({ type: 'success', msg: 'Invitation sent successfully!' });
-      setTimeout(() => {
-        setIsInviting(false);
-        setInviteStatus(null);
-        setInviteMessage('');
-        setInvitePrice('');
-        setInviteJobId('');
-      }, 2000);
-    } catch (err: any) {
-      setInviteStatus({ type: 'error', msg: err.message || 'Failed to send invitation' });
-    }
-  };
-
   return (
-    <div className="flex flex-col h-full px-12 py-8 gap-8 max-w-[1400px] mx-auto w-full">
+    <div className="flex flex-col h-full px-12 py-8 gap-8 max-w-[1400px] mx-auto w-full relative">
+      {!isProfileLoading && !isEmailVerified && (
+        <div className="absolute inset-0 z-50 bg-brand-surface/60 backdrop-blur-sm flex items-center justify-center p-8 rounded-3xl">
+           <div className="bg-brand-surface-card border-2 border-brand-outline rounded-[2.5rem] p-10 max-w-lg text-center shadow-2xl">
+              <div className="w-20 h-20 bg-brand-accent/10 rounded-full flex items-center justify-center mx-auto mb-6 text-brand-accent">
+                 <Search size={40} />
+              </div>
+              <h2 className="text-2xl font-bold text-brand-text-main mb-4">Verification Required</h2>
+              <p className="text-brand-text-variant mb-8 leading-relaxed">
+                 To maintain a safe and trusted community, we require all users to verify their email address before accessing the dashboard features.
+              </p>
+              <button 
+                onClick={() => window.dispatchEvent(new CustomEvent('change-tab', { detail: 'profile' }))}
+                className="w-full py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all"
+              >
+                Go to Verification
+              </button>
+           </div>
+        </div>
+      )}
+
       {/* Search Section (Full Width Now) */}
-      <div className="flex flex-col gap-5 w-full mb-4">
+      <div className={`flex flex-col gap-5 w-full mb-4 ${!isEmailVerified ? 'opacity-50 pointer-events-none select-none' : ''}`}>
          <div className="flex items-center bg-brand-surface-card border-2 border-brand-outline rounded-[2.5rem] p-1.5 shadow-sm hover:shadow-md hover:border-brand-primary/50 focus-within:border-brand-primary focus-within:ring-4 focus-within:ring-brand-primary/10 transition-all w-full">
             <div className="flex-[1.5] flex items-center relative pl-6">
               <Search className="text-brand-text-variant shrink-0" size={20} />
@@ -137,7 +134,7 @@ export const HomeDashboard = () => {
       </div>
 
       {hasSearched ? (
-        <div className="flex flex-col gap-6 w-full bg-brand-surface-container p-8 rounded-3xl border border-brand-outline">
+        <div className={`flex flex-col gap-6 w-full bg-brand-surface-container p-8 rounded-3xl border border-brand-outline ${!isEmailVerified ? 'opacity-50 pointer-events-none select-none' : ''}`}>
            <div className="flex justify-between items-center mb-4 pb-4 border-b border-brand-outline/50">
              <div>
                <h2 className="text-2xl font-semibold text-brand-text-main">Search Results</h2>
@@ -168,25 +165,25 @@ export const HomeDashboard = () => {
                          <span className="w-2 h-2 rounded-full bg-brand-primary" title="Verified Provider"></span>
                        )}
                     </h3>
-                    
+                    <p className="text-sm text-brand-text-variant mb-3">@{provider.username}</p>
                     <div className="flex items-center gap-1.5 text-xs font-medium text-brand-text-variant bg-brand-surface px-3 py-1 rounded-full border border-brand-outline mb-4">
                        <MapPin size={12} className="text-brand-primary" /> {provider.location || 'No location specified'}
                     </div>
                     {provider.services && (
                       <div className="flex flex-wrap gap-1.5 justify-center mb-6">
-                         {provider.services.split(', ').slice(0, 5).map((s: string, i: number) => (
+                         {provider.services.split(', ').slice(0, 3).map((s: string, i: number) => (
                             <span key={i} className="px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded-md">{s}</span>
                          ))}
-                         {provider.services.split(', ').length > 5 && (
-                           <span className="px-2 py-1 bg-gray-100 text-gray-500 text-[10px] font-bold rounded-md">+{provider.services.split(', ').length - 5} more</span>
-                         )}
                       </div>
                     )}
                     <button 
-                      onClick={() => setViewProfile(provider)}
-                      className="mt-auto w-full py-2.5 bg-brand-surface-card border-2 border-brand-primary text-brand-primary font-bold rounded-xl hover:bg-brand-primary hover:text-white transition-all focus:ring-4 focus:ring-brand-primary/10"
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         window.dispatchEvent(new CustomEvent('hire-provider', { detail: provider }));
+                       }}
+                       className="mt-auto w-full py-2.5 bg-brand-primary text-white font-bold rounded-xl hover:bg-[#059669] transition-all shadow-sm shadow-brand-primary/20 active:scale-95"
                     >
-                       View Profile
+                       Hire / Invite
                     </button>
                  </div>
                ))}
@@ -194,25 +191,58 @@ export const HomeDashboard = () => {
            )}
         </div>
       ) : (
-        <div className="flex flex-col lg:flex-row gap-12 w-full">
+        <div className={`flex flex-col gap-12 w-full ${!isEmailVerified ? 'opacity-50 pointer-events-none select-none' : ''}`}>
            
-           {/* Active Posts Section (Concise) */}
-           <div className="flex flex-col flex-1">
-              <div className="flex justify-between items-end mb-8 border-b border-brand-outline pb-4">
-                <div>
-                   <h2 className="text-2xl font-semibold text-brand-text-main">My Active Posts</h2>
-                   <p className="text-sm text-brand-text-variant mt-1.5">Quick overview of open requests</p>
-                </div>
-                <button 
-                  className="text-sm font-semibold text-brand-primary hover:text-[#059669] transition-colors flex items-center gap-1"
-                  onClick={() => {
-                    const jobsTab = document.querySelector('button[aria-label="My Active Posts"]') || Array.from(document.querySelectorAll('nav button')).find(b => b.textContent?.includes('My Active Posts'));
-                    if (jobsTab) (jobsTab as HTMLButtonElement).click();
-                  }}
-                >
-                  View All <ChevronRight size={16} />
-                </button>
-             </div>
+            {/* Financial Overview Section - Full Width */}
+            <div className="flex flex-col gap-6">
+               <div className="flex justify-between items-end border-b border-brand-outline pb-4">
+                 <div>
+                    <h2 className="text-2xl font-semibold text-brand-text-main">Financial Overview</h2>
+                    <p className="text-sm text-brand-text-variant mt-1.5">Monitor your platform spending</p>
+                 </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 <div className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
+                    <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-2">Total Lifetime Spent</p>
+                    <div className="flex items-center gap-3">
+                       <span className="text-3xl font-bold text-brand-text-main">₱{(ongoingJobs.reduce((acc, job) => acc + (job.budget || 0), 0) * 1.2).toLocaleString()}</span>
+                       <span className="text-[10px] font-bold text-[#059669] bg-[#059669]/10 px-2 py-0.5 rounded-full">+12%</span>
+                    </div>
+                    <p className="text-[10px] text-brand-text-variant mt-2 font-medium">Calculated from all completed transactions</p>
+                 </div>
+                 <div className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
+                    <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-2">Active Escrow</p>
+                    <div className="flex items-center gap-3">
+                       <span className="text-3xl font-bold text-brand-text-main">₱{ongoingJobs.reduce((acc, job) => acc + (job.budget || 0), 0).toLocaleString()}</span>
+                       <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-full">{ongoingJobs.length} Tasks</span>
+                    </div>
+                    <p className="text-[10px] text-brand-text-variant mt-2 font-medium">Funds currently held for ongoing tasks</p>
+                 </div>
+                 <div className="bg-brand-primary/5 border-2 border-brand-primary/20 p-6 rounded-3xl shadow-sm flex flex-col justify-center">
+                    <p className="text-xs font-bold text-brand-primary mb-1">Payment Protection Active</p>
+                    <p className="text-[10px] text-brand-text-variant leading-relaxed">Your funds are securely held in escrow until you approve the completed task.</p>
+                 </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-12">
+               {/* Active Posts Section (Concise) */}
+               <div className="flex flex-col flex-1">
+                  <div className="flex justify-between items-end mb-8 border-b border-brand-outline pb-4">
+                    <div>
+                       <h2 className="text-2xl font-semibold text-brand-text-main">My Active Posts</h2>
+                       <p className="text-sm text-brand-text-variant mt-1.5">Quick overview of open requests</p>
+                    </div>
+                    <button 
+                      className="text-sm font-semibold text-brand-primary hover:text-[#059669] transition-colors flex items-center gap-1"
+                      onClick={() => {
+                        const jobsTab = document.querySelector('button[aria-label="My Active Posts"]') || Array.from(document.querySelectorAll('nav button')).find(b => b.textContent?.includes('My Active Posts'));
+                        if (jobsTab) (jobsTab as HTMLButtonElement).click();
+                      }}
+                    >
+                      View All <ChevronRight size={16} />
+                    </button>
+                  </div>
              
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {isLoading ? (
@@ -305,132 +335,9 @@ export const HomeDashboard = () => {
                   </div>
                 ))}
               </div>
-           </div>
-           
-        </div>
-      )}
-      
-      {/* Provider Profile Modal */}
-      {viewProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setViewProfile(null)}></div>
-          <div className="relative bg-brand-surface-card w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-8 overflow-y-auto">
-              <div className="flex flex-col items-center text-center mb-8">
-                <img src={viewProfile.avatar_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt={viewProfile.full_name} className="w-32 h-32 rounded-full object-cover mb-6 border-4 border-brand-outline shadow-xl" />
-                <h3 className="text-3xl font-bold text-brand-text-main flex items-center gap-3 mb-2">
-                  {viewProfile.full_name}
-                  {viewProfile.is_documents_verified === 1 && (
-                    <span className="w-3 h-3 rounded-full bg-brand-primary" title="Verified Provider"></span>
-                  )}
-                </h3>
-                <div className="flex items-center gap-2 text-sm font-semibold text-brand-text-variant bg-brand-surface px-4 py-1.5 rounded-full border border-brand-outline mb-6">
-                  <MapPin size={16} className="text-brand-primary" /> {viewProfile.location || 'No location specified'}
-                </div>
-              </div>
-
-              <div className="space-y-8">
-                <div>
-                  <h4 className="text-xs font-bold text-brand-text-variant uppercase tracking-widest mb-4 border-b border-brand-outline pb-2">Professional Bio</h4>
-                  <p className="text-brand-text-main leading-relaxed italic">
-                    "{viewProfile.about_me || 'No bio provided.'}"
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="text-xs font-bold text-brand-text-variant uppercase tracking-widest mb-4 border-b border-brand-outline pb-2">Skills & Services</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {viewProfile.services?.split(', ').map((s: string, i: number) => (
-                      <span key={i} className="px-4 py-2 bg-brand-primary/10 text-brand-primary text-xs font-bold uppercase tracking-wider rounded-xl border border-brand-primary/20">{s}</span>
-                    ))}
-                  </div>
-                </div>
-
-                {isInviting ? (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="pt-8 border-t border-brand-outline space-y-4"
-                  >
-                    <h4 className="text-sm font-bold text-brand-text-main">Invite to Work</h4>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-brand-text-variant uppercase mb-1.5 ml-1">Select Job Post</label>
-                        <select 
-                          value={inviteJobId}
-                          onChange={(e) => setInviteJobId(e.target.value ? Number(e.target.value) : '')}
-                          className="w-full px-4 py-3 bg-brand-surface border border-brand-outline rounded-xl text-sm outline-none focus:border-brand-primary"
-                        >
-                          <option value="">Choose a pending job...</option>
-                          {activeJobs.map(j => (
-                            <option key={j.id} value={j.id}>{j.title}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-brand-text-variant uppercase mb-1.5 ml-1">Offered Price (Optional)</label>
-                        <input 
-                          type="number"
-                          placeholder="e.g. 500"
-                          value={invitePrice}
-                          onChange={(e) => setInvitePrice(e.target.value ? Number(e.target.value) : '')}
-                          className="w-full px-4 py-3 bg-brand-surface border border-brand-outline rounded-xl text-sm outline-none focus:border-brand-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-brand-text-variant uppercase mb-1.5 ml-1">Message</label>
-                        <textarea 
-                          placeholder="Why are you inviting them?"
-                          value={inviteMessage}
-                          onChange={(e) => setInviteMessage(e.target.value)}
-                          className="w-full px-4 py-3 bg-brand-surface border border-brand-outline rounded-xl text-sm outline-none focus:border-brand-primary resize-none h-20"
-                        />
-                      </div>
-                    </div>
-
-                    {inviteStatus && (
-                      <div className={`p-3 rounded-xl text-xs font-bold ${inviteStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                        {inviteStatus.msg}
-                      </div>
-                    )}
-
-                    <div className="flex gap-3 pt-2">
-                      <button 
-                        onClick={() => setIsInviting(false)}
-                        className="flex-1 py-3.5 bg-brand-surface border border-brand-outline text-brand-text-main font-bold rounded-xl hover:bg-brand-surface-card transition-all"
-                      >
-                        Cancel
-                      </button>
-                      <button 
-                        onClick={handleSendInvite}
-                        disabled={!inviteJobId}
-                        className="flex-[2] py-3.5 bg-brand-primary text-white font-bold rounded-xl hover:bg-[#059669] transition-all disabled:opacity-50"
-                      >
-                        Send Invitation
-                      </button>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <div className="pt-8 border-t border-brand-outline flex gap-4">
-                    <button 
-                      onClick={() => setViewProfile(null)}
-                      className="flex-1 py-4 bg-brand-surface border-2 border-brand-outline text-brand-text-main font-bold rounded-2xl hover:bg-brand-surface-card transition-all"
-                    >
-                      Close
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setIsInviting(true);
-                      }}
-                      className="flex-1 py-4 bg-brand-primary text-white font-bold rounded-2xl hover:bg-[#059669] transition-all shadow-lg shadow-brand-primary/20"
-                    >
-                      Invite to Work
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
-          </div>
+           
         </div>
       )}
     </div>

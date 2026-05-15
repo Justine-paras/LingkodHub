@@ -5,7 +5,10 @@ import {
   Camera, 
   Edit2, 
   MapPin, 
-  Trash2 
+  Trash2,
+  Smartphone,
+  Banknote,
+  CheckCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../../../services/api';
@@ -27,6 +30,24 @@ export const ClientProfileSettings = () => {
   const [isOTPSent, setIsOTPSent] = React.useState(false);
   const [otpValue, setOtpValue] = React.useState('');
   const [isVerifying, setIsVerifying] = React.useState(false);
+  const [isSendingOTP, setIsSendingOTP] = React.useState(false);
+
+  const [prefEmailMessages, setPrefEmailMessages] = React.useState(1);
+  const [prefEmailUpdates, setPrefEmailUpdates] = React.useState(1);
+  const [prefEmailPromos, setPrefEmailPromos] = React.useState(0);
+  const [prefPushAlerts, setPrefPushAlerts] = React.useState(1);
+  const [prefPushMarketing, setPrefPushMarketing] = React.useState(0);
+
+  const [isPublicProfile, setIsPublicProfile] = React.useState(1);
+  const [showOnlineStatus, setShowOnlineStatus] = React.useState(0);
+  const [isDeletingAccount, setIsDeletingAccount] = React.useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = React.useState('');
+  const [gcashNumber, setGcashNumber] = React.useState('');
+  const [mayaNumber, setMayaNumber] = React.useState('');
+  const [preferredPayment, setPreferredPayment] = React.useState('');
+  const [addresses, setAddresses] = React.useState<any[]>([]);
+  const [isAddingAddress, setIsAddingAddress] = React.useState(false);
+  const [newAddress, setNewAddress] = React.useState({ label: '', address_text: '' });
 
   const [activeSettingsTab, setActiveSettingsTab] = React.useState('profile');
   const [isLoading, setIsLoading] = React.useState(true);
@@ -53,6 +74,21 @@ export const ClientProfileSettings = () => {
         setAvatarUrl(userData.avatar_url || '');
         setJobsCount(jobs.length || 0);
         setIsEmailVerified(!!userData.is_email_verified);
+        
+        setPrefEmailMessages(userData.pref_email_messages ?? 1);
+        setPrefEmailUpdates(userData.pref_email_updates ?? 1);
+        setPrefEmailPromos(userData.pref_email_promos ?? 0);
+        setPrefPushAlerts(userData.pref_push_alerts ?? 1);
+        setPrefPushMarketing(userData.pref_push_marketing ?? 0);
+        setIsPublicProfile(userData.is_public_profile ?? 1);
+        setShowOnlineStatus(userData.show_online_status ?? 0);
+        setGcashNumber(userData.gcash_number || '');
+        setMayaNumber(userData.maya_number || '');
+        setPreferredPayment(userData.payment_method || 'gcash');
+
+        const addr = await api.getAddresses();
+        setAddresses(addr);
+
         setIsLoading(false);
       } catch (err) {
         console.error(err);
@@ -68,7 +104,17 @@ export const ClientProfileSettings = () => {
         full_name: displayName,
         phone,
         location,
-        about_me: aboutMe
+        about_me: aboutMe,
+        pref_email_messages: prefEmailMessages,
+        pref_email_updates: prefEmailUpdates,
+        pref_email_promos: prefEmailPromos,
+        pref_push_alerts: prefPushAlerts,
+        pref_push_marketing: prefPushMarketing,
+        is_public_profile: isPublicProfile,
+        show_online_status: showOnlineStatus,
+        gcash_number: gcashNumber,
+        maya_number: mayaNumber,
+        payment_method: preferredPayment
       });
       setShowSuccess(true);
       window.dispatchEvent(new CustomEvent('profile-updated'));
@@ -80,11 +126,14 @@ export const ClientProfileSettings = () => {
   };
 
   const handleSendOTP = async () => {
+    setIsSendingOTP(true);
     try {
       await api.sendOTP();
       setIsOTPSent(true);
     } catch (err) {
       alert('Failed to send OTP. Please try again.');
+    } finally {
+      setIsSendingOTP(false);
     }
   };
 
@@ -117,6 +166,53 @@ export const ClientProfileSettings = () => {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
+    try {
+      await api.deleteMe();
+      window.location.href = '/login';
+    } catch (err) {
+      alert('Failed to delete account. Please try again.');
+    }
+  };
+
+  const handleAddAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (addresses.length >= 3) {
+      alert('You can only have a maximum of 3 saved addresses.');
+      return;
+    }
+    try {
+      await api.addAddress({ ...newAddress, is_default: addresses.length === 0 ? 1 : 0 });
+      const addr = await api.getAddresses();
+      setAddresses(addr);
+      setNewAddress({ label: '', address_text: '' });
+      setIsAddingAddress(false);
+    } catch (err: any) {
+      alert(err.message || 'Failed to add address');
+    }
+  };
+
+  const handleDeleteAddress = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this address?')) return;
+    try {
+      await api.deleteAddress(id);
+      setAddresses(addresses.filter(a => a.id !== id));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete address');
+    }
+  };
+
+  const handleSetDefaultAddress = async (id: number) => {
+    try {
+      await api.setDefaultAddress(id);
+      const addr = await api.getAddresses();
+      setAddresses(addr);
+    } catch (err: any) {
+      alert(err.message || 'Failed to set default address');
+    }
+  };
+
   const calculateCompletion = () => {
     const fields = [
       { name: 'Display Name', value: displayName },
@@ -143,21 +239,22 @@ export const ClientProfileSettings = () => {
     <div className="max-w-5xl mx-auto py-16 px-12">
       <header className="flex justify-between items-end mb-12">
         <div>
-          <h1 className="text-3xl font-semibold text-brand-text-main mb-2">Profile Settings</h1>
-          <p className="text-sm text-brand-text-variant">Manage your account and personal details</p>
+          <h1 className="text-3xl font-semibold text-brand-text-main mb-2">Account Settings</h1>
+          <p className="text-sm text-brand-text-variant">Manage your account preferences and personal details</p>
         </div>
         <div className="flex gap-4 text-xs font-medium text-brand-text-variant mt-4 sm:mt-0">
             {isEmailVerified ? (
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand-primary"></span> Verified User</span>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand-accent"></span> Standard Account</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand-accent"></span> Unverified Account</span>
                 {!isOTPSent ? (
                   <button 
                     onClick={handleSendOTP}
-                    className="text-[10px] font-bold text-brand-primary hover:underline uppercase tracking-wider"
+                    disabled={isSendingOTP}
+                    className="text-[10px] font-bold text-brand-primary hover:underline uppercase tracking-wider disabled:opacity-50"
                   >
-                    Verify Now
+                    {isSendingOTP ? 'Sending...' : 'Verify Now'}
                   </button>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -186,12 +283,12 @@ export const ClientProfileSettings = () => {
       <div className="flex overflow-x-auto no-scrollbar border-b border-brand-outline mb-8">
         <div className="flex gap-8 px-2">
             {[
-              { id: 'profile', label: 'Profile' },
+              { id: 'profile', label: 'Personal Info' },
               { id: 'security', label: 'Security' },
               { id: 'notifications', label: 'Notifications' },
-              { id: 'privacy', label: 'Privacy' },
-              { id: 'billing', label: 'Billing' },
-              { id: 'location', label: 'Location' },
+              { id: 'privacy', label: 'Privacy & Data' },
+              { id: 'billing', label: 'Payments' },
+              { id: 'location', label: 'Addresses' },
             ].map(tab => (
                <button
                  key={tab.id}
@@ -381,8 +478,6 @@ export const ClientProfileSettings = () => {
                     </button>
                   </div>
                 </div>
-
-                <PasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} />
               </div>
             )}
 
@@ -397,7 +492,12 @@ export const ClientProfileSettings = () => {
                             <p className="text-xs text-brand-text-variant">Receive an email when providers message you.</p>
                          </div>
                          <label className="relative inline-flex items-center cursor-pointer outline-none">
-                           <input type="checkbox" className="sr-only peer" defaultChecked={true} />
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer" 
+                             checked={prefEmailMessages === 1}
+                             onChange={e => setPrefEmailMessages(e.target.checked ? 1 : 0)} 
+                           />
                            <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
                          </label>
                       </div>
@@ -407,7 +507,12 @@ export const ClientProfileSettings = () => {
                             <p className="text-xs text-brand-text-variant">Get notified when a job status changes or an offer is made.</p>
                          </div>
                          <label className="relative inline-flex items-center cursor-pointer outline-none">
-                           <input type="checkbox" className="sr-only peer" defaultChecked={true} />
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer" 
+                             checked={prefEmailUpdates === 1}
+                             onChange={e => setPrefEmailUpdates(e.target.checked ? 1 : 0)} 
+                           />
                            <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
                          </label>
                       </div>
@@ -417,7 +522,12 @@ export const ClientProfileSettings = () => {
                             <p className="text-xs text-brand-text-variant">Receive emails about new features, discounts, and platform updates.</p>
                          </div>
                          <label className="relative inline-flex items-center cursor-pointer outline-none">
-                           <input type="checkbox" className="sr-only peer" defaultChecked={false} />
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer" 
+                             checked={prefEmailPromos === 1}
+                             onChange={e => setPrefEmailPromos(e.target.checked ? 1 : 0)} 
+                           />
                            <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
                          </label>
                       </div>
@@ -433,7 +543,12 @@ export const ClientProfileSettings = () => {
                             <p className="text-xs text-brand-text-variant">Allow the website to send you browser push notifications for real-time updates.</p>
                          </div>
                          <label className="relative inline-flex items-center cursor-pointer outline-none">
-                           <input type="checkbox" className="sr-only peer" defaultChecked={false} />
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer" 
+                             checked={prefPushAlerts === 1}
+                             onChange={e => setPrefPushAlerts(e.target.checked ? 1 : 0)} 
+                           />
                            <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
                          </label>
                       </div>
@@ -443,7 +558,12 @@ export const ClientProfileSettings = () => {
                             <p className="text-xs text-brand-text-variant">Receive occasional push notifications about local promotions and discounts.</p>
                          </div>
                          <label className="relative inline-flex items-center cursor-pointer outline-none">
-                           <input type="checkbox" className="sr-only peer" defaultChecked={false} />
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer" 
+                             checked={prefPushMarketing === 1}
+                             onChange={e => setPrefPushMarketing(e.target.checked ? 1 : 0)} 
+                           />
                            <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
                          </label>
                       </div>
@@ -452,241 +572,357 @@ export const ClientProfileSettings = () => {
                </div>
             )}
 
-            {activeSettingsTab === 'privacy' && (
-               <div className="space-y-8">
-                 <div>
-                   <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest mb-4">Profile Visibility</h3>
-                   <div className="bg-brand-surface border-2 border-brand-outline rounded-2xl flex flex-col shadow-sm">
-                      <div className="flex items-center justify-between p-6 border-b border-brand-outline">
-                         <div className="pr-4">
-                            <h4 className="text-sm font-semibold text-brand-text-main mb-1">Public Profile</h4>
-                            <p className="text-xs text-brand-text-variant">Allow other users to find and view your public profile page.</p>
+             {activeSettingsTab === 'privacy' && (
+                <div className="space-y-8">
+                  <div>
+                    <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest mb-4">Profile Visibility</h3>
+                    <div className="bg-brand-surface border-2 border-brand-outline rounded-2xl flex flex-col shadow-sm">
+                       <div className="flex items-center justify-between p-6 border-b border-brand-outline">
+                          <div className="pr-4">
+                             <h4 className="text-sm font-semibold text-brand-text-main mb-1">Public Profile</h4>
+                             <p className="text-xs text-brand-text-variant">Allow other users to find and view your public profile page.</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer outline-none">
+                            <input 
+                              type="checkbox" 
+                              className="sr-only peer" 
+                              checked={isPublicProfile === 1}
+                              onChange={e => setIsPublicProfile(e.target.checked ? 1 : 0)} 
+                            />
+                            <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
+                          </label>
+                       </div>
+                       <div className="flex items-center justify-between p-6">
+                          <div className="pr-4">
+                             <h4 className="text-sm font-semibold text-brand-text-main mb-1">Online Status</h4>
+                             <p className="text-xs text-brand-text-variant">Show other users when you are currently active on the platform.</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer outline-none">
+                            <input 
+                              type="checkbox" 
+                              className="sr-only peer" 
+                              checked={showOnlineStatus === 1}
+                              onChange={e => setShowOnlineStatus(e.target.checked ? 1 : 0)} 
+                            />
+                            <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
+                          </label>
+                       </div>
+                    </div>
+                  </div>
+ 
+                  <div>
+                    <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest mb-4">Account Termination</h3>
+                    <div className="bg-red-50/50 border-2 border-red-200/50 rounded-2xl p-6 shadow-sm">
+                       <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center justify-between">
+                         <div>
+                            <h4 className="text-sm font-semibold text-red-700 mb-1">Delete Account</h4>
+                            <p className="text-xs text-red-600/80">Permanently remove your account and all associated data. This action is irreversible.</p>
                          </div>
-                         <label className="relative inline-flex items-center cursor-pointer outline-none">
-                           <input type="checkbox" className="sr-only peer" defaultChecked={true} />
-                           <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
-                         </label>
-                      </div>
-                      <div className="flex items-center justify-between p-6 border-b border-brand-outline">
-                         <div className="pr-4">
-                            <h4 className="text-sm font-semibold text-brand-text-main mb-1">Show Location Status</h4>
-                            <p className="text-xs text-brand-text-variant">Display your general location (e.g., Dasmariñas City) to help other users.</p>
-                         </div>
-                         <label className="relative inline-flex items-center cursor-pointer outline-none">
-                           <input type="checkbox" className="sr-only peer" defaultChecked={true} />
-                           <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
-                         </label>
-                      </div>
-                      <div className="flex items-center justify-between p-6">
-                         <div className="pr-4">
-                            <h4 className="text-sm font-semibold text-brand-text-main mb-1">Online Status</h4>
-                            <p className="text-xs text-brand-text-variant">Show other users when you are currently active on the platform.</p>
-                         </div>
-                         <label className="relative inline-flex items-center cursor-pointer outline-none">
-                           <input type="checkbox" className="sr-only peer" defaultChecked={false} />
-                           <div className="w-11 h-6 bg-brand-surface border-2 border-brand-outline rounded-full peer peer-focus:ring-4 peer-focus:ring-brand-primary/10 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text-variant peer-checked:after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary peer-checked:border-brand-primary shadow-sm transition-colors"></div>
-                         </label>
-                      </div>
-                   </div>
-                 </div>
-
-                 <div>
-                   <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest mb-4">Data & History</h3>
-                   <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-brand-surface border-2 border-brand-outline rounded-2xl p-6 shadow-sm mb-4">
-                     <div>
-                        <h4 className="text-sm font-semibold text-brand-text-main mb-1">Download Account Data</h4>
-                        <p className="text-xs text-brand-text-variant">Get a copy of all your job history, messages, and account information.</p>
-                     </div>
-                     <button type="button" className="shrink-0 px-6 py-2.5 bg-brand-surface-card border-2 border-brand-outline text-brand-text-main text-sm font-bold hover:border-brand-primary/50 hover:text-brand-primary transition-all rounded-xl shadow-sm focus:ring-4 focus:ring-brand-primary/10 w-full sm:w-auto">
-                        Request Data
-                     </button>
-                   </div>
-                   
-                   <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-red-50/50 border-2 border-red-200/50 rounded-2xl p-6 shadow-sm">
-                     <div>
-                        <h4 className="text-sm font-semibold text-red-700 mb-1">Delete Account</h4>
-                        <p className="text-xs text-red-600/80">Permanently remove your account and all associated data.</p>
-                     </div>
-                     <button type="button" className="shrink-0 px-6 py-2.5 bg-white border-2 border-red-200 text-red-600 text-sm font-bold hover:bg-red-50 transition-all rounded-xl shadow-sm focus:ring-4 focus:ring-red-100 w-full sm:w-auto">
-                        Delete Account
-                     </button>
-                   </div>
-                 </div>
-               </div>
-            )}
+                         <button 
+                           type="button" 
+                           onClick={() => setIsDeletingAccount(true)}
+                           className="shrink-0 px-6 py-2.5 bg-white border-2 border-red-200 text-red-600 text-sm font-bold hover:bg-red-50 transition-all rounded-xl shadow-sm focus:ring-4 focus:ring-red-100 w-full sm:w-auto"
+                         >
+                            Delete Account
+                         </button>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+             )}
 
             {activeSettingsTab === 'billing' && (
                <div className="space-y-8">
                  <div>
-                   <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest">Payment Methods</h3>
-                     <button type="button" className="text-xs font-bold text-brand-primary hover:text-brand-primary/80 transition-colors">
-                       + Add New Method
-                     </button>
-                   </div>
-                   <div className="bg-brand-surface border-2 border-brand-outline rounded-2xl flex flex-col shadow-sm">
-                      <div className="flex items-center justify-between p-6 border-b border-brand-outline">
-                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-8 bg-brand-surface-card border border-brand-outline rounded flex items-center justify-center font-bold text-brand-text-main text-xs italic">
-                                VISA
-                            </div>
-                            <div>
-                               <h4 className="text-sm font-bold text-brand-text-main mb-0.5">Visa ending in 4242</h4>
-                               <p className="text-xs text-brand-text-variant">Expires 12/28</p>
-                            </div>
-                         </div>
-                         <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold uppercase tracking-widest bg-brand-primary/10 text-brand-primary px-2 py-1 rounded">Default</span>
-                            <button type="button" className="text-brand-text-variant hover:text-red-500 transition-colors">
-                               <Trash2 size={16} />
-                            </button>
-                         </div>
+                   <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest mb-4">Payment Methods</h3>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* GCash */}
+                      <div className={`p-6 rounded-2xl border-2 transition-all ${preferredPayment === 'gcash' ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline bg-brand-surface'}`}>
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-12 h-8 bg-blue-600 rounded flex items-center justify-center font-bold text-white text-[10px] tracking-tighter">GCash</div>
+                          {preferredPayment === 'gcash' && <span className="text-[10px] font-bold text-brand-primary uppercase">Default</span>}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="text-[10px] font-bold text-brand-text-variant uppercase mb-1">GCash Number</p>
+                            <input 
+                              type="text" 
+                              placeholder="09XXXXXXXXX"
+                              value={gcashNumber}
+                              onChange={e => {
+                                const val = e.target.value.replace(/\D/g, '').slice(0, 11);
+                                setGcashNumber(val);
+                              }}
+                              className="w-full bg-transparent border-none p-0 text-sm font-bold text-brand-text-main tracking-widest focus:ring-0 placeholder:text-brand-text-variant/30"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                             <button 
+                              onClick={() => setPreferredPayment('gcash')}
+                              disabled={gcashNumber.length < 11 || preferredPayment === 'gcash'}
+                              className={`p-2 transition-colors ${preferredPayment === 'gcash' ? 'text-brand-primary' : 'text-brand-text-variant hover:text-brand-primary disabled:opacity-30'}`}
+                              title="Set as Default"
+                             >
+                                <CheckCircle size={16} />
+                             </button>
+                             <button 
+                              onClick={() => setGcashNumber('')}
+                              className="p-2 text-brand-text-variant hover:text-red-500 transition-colors"
+                             >
+                                <Trash2 size={14} />
+                             </button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between p-6">
-                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-8 bg-[#0079C1] rounded flex items-center justify-center font-bold text-white text-xs italic">
-                                PayPal
-                            </div>
-                            <div>
-                               <h4 className="text-sm font-bold text-brand-text-main mb-0.5">juan.delacruz@example.com</h4>
-                               <p className="text-xs text-brand-text-variant">Connected account</p>
-                            </div>
-                         </div>
-                         <div className="flex items-center gap-3">
-                            <button type="button" className="text-xs font-bold text-brand-text-variant hover:text-brand-text-main transition-colors">
-                               Make Default
+
+                      {/* Maya */}
+                      <div className={`p-6 rounded-2xl border-2 transition-all ${preferredPayment === 'maya' ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline bg-brand-surface'}`}>
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-12 h-8 bg-green-500 rounded flex items-center justify-center font-bold text-white text-[10px] tracking-tighter">MAYA</div>
+                          {preferredPayment === 'maya' && <span className="text-[10px] font-bold text-brand-primary uppercase">Default</span>}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="text-[10px] font-bold text-brand-text-variant uppercase mb-1">Maya Number</p>
+                            <input 
+                              type="text" 
+                              placeholder="09XXXXXXXXX"
+                              value={mayaNumber}
+                              onChange={e => {
+                                const val = e.target.value.replace(/\D/g, '').slice(0, 11);
+                                setMayaNumber(val);
+                              }}
+                              className="w-full bg-transparent border-none p-0 text-sm font-bold text-brand-text-main tracking-widest focus:ring-0 placeholder:text-brand-text-variant/30"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => setPreferredPayment('maya')}
+                              disabled={mayaNumber.length < 11 || preferredPayment === 'maya'}
+                              className={`p-2 transition-colors ${preferredPayment === 'maya' ? 'text-brand-primary' : 'text-brand-text-variant hover:text-brand-primary disabled:opacity-30'}`}
+                              title="Set as Default"
+                            >
+                               <CheckCircle size={16} />
                             </button>
-                            <button type="button" className="text-brand-text-variant hover:text-red-500 transition-colors">
-                               <Trash2 size={16} />
-                            </button>
-                         </div>
+                            <button 
+                              onClick={() => setMayaNumber('')}
+                              className="p-2 text-brand-text-variant hover:text-red-500 transition-colors"
+                             >
+                                <Trash2 size={14} />
+                             </button>
+                          </div>
+                        </div>
                       </div>
                    </div>
                  </div>
 
-                 <div>
-                   <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest mb-4">Billing History</h3>
-                   <div className="bg-brand-surface border-2 border-brand-outline rounded-2xl flex flex-col shadow-sm overflow-hidden">
-                      <table className="w-full text-left text-sm border-collapse">
-                         <thead className="bg-brand-surface-container border-b border-brand-outline text-brand-text-variant text-xs uppercase">
-                            <tr>
-                               <th className="px-6 py-4 font-semibold">Date</th>
-                               <th className="px-6 py-4 font-semibold">Description</th>
-                               <th className="px-6 py-4 font-semibold">Amount</th>
-                               <th className="px-6 py-4 font-semibold">Status</th>
-                               <th className="px-6 py-4 font-semibold text-right">Receipt</th>
-                            </tr>
-                         </thead>
-                         <tbody className="divide-y divide-brand-outline text-brand-text-main">
-                            <tr className="hover:bg-brand-surface-card transition-colors">
-                               <td className="px-6 py-4 whitespace-nowrap text-xs">Oct 24, 2023</td>
-                               <td className="px-6 py-4 font-medium">Faucet Repair - Payment</td>
-                               <td className="px-6 py-4">₱450.00</td>
-                               <td className="px-6 py-4">
-                                  <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Paid</span>
-                               </td>
-                               <td className="px-6 py-4 text-right">
-                                  <button className="text-brand-primary hover:underline text-xs font-semibold">Download</button>
-                               </td>
-                            </tr>
-                         </tbody>
-                      </table>
-                   </div>
-                 </div>
+                 <BillingHistory />
                </div>
             )}
 
             {activeSettingsTab === 'location' && (
                <div className="space-y-8">
                  <div>
-                   <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest mb-4">Primary Address</h3>
-                   <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-brand-surface border-2 border-brand-outline rounded-2xl p-6 shadow-sm">
-                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-brand-primary/10 rounded-full flex items-center justify-center shrink-0">
-                           <MapPin className="text-brand-primary" size={24} />
-                        </div>
-                        <div>
-                           <h4 className="text-sm font-semibold text-brand-text-main mb-1">Makati City, Metro Manila</h4>
-                           <p className="text-xs text-brand-text-variant">123 Ayala Avenue, San Lorenzo</p>
-                        </div>
+                   <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest mb-4">Saved Addresses</h3>
+                   {addresses.length === 0 ? (
+                     <div className="bg-brand-surface border-2 border-dashed border-brand-outline rounded-2xl p-12 text-center">
+                        <MapPin className="mx-auto text-brand-text-variant mb-4 opacity-20" size={48} />
+                        <p className="text-brand-text-variant text-sm">No saved addresses yet.</p>
                      </div>
-                     <button type="button" className="shrink-0 px-6 py-2.5 bg-brand-surface-card border-2 border-brand-outline text-brand-text-main text-sm font-bold hover:border-brand-primary/50 hover:text-brand-primary transition-all rounded-xl shadow-sm focus:ring-4 focus:ring-brand-primary/10 w-full sm:w-auto">
-                        Edit Address
-                     </button>
-                   </div>
+                   ) : (
+                     <div className="grid grid-cols-1 gap-4">
+                        {addresses.map(addr => (
+                          <div key={addr.id} className={`flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between border-2 rounded-2xl p-6 shadow-sm transition-all ${addr.is_default ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline bg-brand-surface'}`}>
+                            <div className="flex items-center gap-4">
+                               <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${addr.is_default ? 'bg-brand-primary/20' : 'bg-brand-outline/20'}`}>
+                                  <MapPin className={addr.is_default ? 'text-brand-primary' : 'text-brand-text-variant'} size={24} />
+                               </div>
+                               <div>
+                                  <h4 className="text-sm font-semibold text-brand-text-main mb-1 flex items-center gap-2">
+                                    {addr.label}
+                                    {addr.is_default === 1 && <span className="text-[10px] font-bold uppercase tracking-widest bg-brand-primary text-white px-2 py-0.5 rounded">Default</span>}
+                                  </h4>
+                                  <p className="text-xs text-brand-text-variant">{addr.address_text}</p>
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                               {!addr.is_default && (
+                                 <button 
+                                  onClick={() => handleSetDefaultAddress(addr.id)}
+                                  className="text-xs font-bold text-brand-primary hover:underline px-4 py-2"
+                                 >
+                                    Set Default
+                                 </button>
+                               )}
+                               <button 
+                                onClick={() => handleDeleteAddress(addr.id)}
+                                className="p-2 text-brand-text-variant hover:text-red-500 transition-colors"
+                               >
+                                  <Trash2 size={16} />
+                               </button>
+                            </div>
+                          </div>
+                        ))}
+                     </div>
+                   )}
                  </div>
 
-                 <div>
-                   <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest">Saved Locations</h3>
-                     <button type="button" className="text-xs font-bold text-brand-primary flex items-center gap-1.5 hover:underline decoration-2 underline-offset-4">
-                       <PlusCircle size={14} /> Add New Location
-                     </button>
-                   </div>
-                   <div className="bg-brand-surface border-2 border-brand-outline rounded-2xl flex flex-col shadow-sm">
-                      <div className="flex items-center justify-between p-6 border-b border-brand-outline">
-                         <div>
-                            <h4 className="text-sm font-semibold text-brand-text-main mb-1 flex items-center gap-2">
-                                Home <span className="text-[10px] font-bold uppercase tracking-widest bg-brand-primary/10 text-brand-primary px-2 py-0.5 rounded">Default</span>
-                            </h4>
-                            <p className="text-xs text-brand-text-variant">Makati City, Metro Manila</p>
-                         </div>
-                         <button type="button" className="text-brand-text-variant hover:text-red-500 transition-colors p-2">
-                            <Trash2 size={16} />
-                         </button>
-                      </div>
-                      <div className="flex items-center justify-between p-6">
-                         <div>
-                            <h4 className="text-sm font-semibold text-brand-text-main mb-1">Office</h4>
-                            <p className="text-xs text-brand-text-variant">BGC, Taguig City</p>
-                         </div>
-                         <button type="button" className="text-brand-text-variant hover:text-red-500 transition-colors p-2">
-                            <Trash2 size={16} />
-                         </button>
-                      </div>
-                   </div>
-                 </div>
+                 {isAddingAddress ? (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="bg-brand-surface border-2 border-brand-primary/30 rounded-2xl p-6 shadow-lg"
+                    >
+                       <form onSubmit={handleAddAddress} className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                             <InputGroup label="Address Label (e.g. Home, Office)">
+                                <input 
+                                  type="text"
+                                  required
+                                  value={newAddress.label}
+                                  onChange={e => setNewAddress({...newAddress, label: e.target.value})}
+                                  placeholder="Home"
+                                  className="w-full bg-brand-surface border-2 border-brand-outline rounded-xl px-4 py-2 focus:outline-none focus:border-brand-primary text-sm"
+                                />
+                             </InputGroup>
+                             <InputGroup label="Full Address">
+                                <input 
+                                  type="text"
+                                  required
+                                  value={newAddress.address_text}
+                                  onChange={e => setNewAddress({...newAddress, address_text: e.target.value})}
+                                  placeholder="123 Street Name, Barangay, City"
+                                  className="w-full bg-brand-surface border-2 border-brand-outline rounded-xl px-4 py-2 focus:outline-none focus:border-brand-primary text-sm"
+                                />
+                             </InputGroup>
+                          </div>
+                          <div className="flex justify-end gap-3">
+                             <button 
+                              type="button" 
+                              onClick={() => setIsAddingAddress(false)}
+                              className="px-4 py-2 text-sm font-semibold text-brand-text-variant hover:text-brand-text-main"
+                             >
+                               Cancel
+                             </button>
+                             <button 
+                              type="submit"
+                              className="px-6 py-2 bg-brand-primary text-white text-sm font-bold rounded-xl shadow-md hover:bg-[#059669] transition-all"
+                             >
+                               Save Address
+                             </button>
+                          </div>
+                       </form>
+                    </motion.div>
+                 ) : (
+                    addresses.length < 3 && (
+                      <button 
+                        type="button" 
+                        onClick={() => setIsAddingAddress(true)}
+                        className="w-full py-4 border-2 border-dashed border-brand-outline rounded-2xl text-brand-text-variant font-bold text-sm hover:border-brand-primary hover:text-brand-primary transition-all flex items-center justify-center gap-2"
+                      >
+                        <PlusCircle size={18} /> Add New Address ({addresses.length}/3)
+                      </button>
+                    )
+                 )}
+                 
+                 {addresses.length >= 3 && (
+                   <p className="text-xs text-brand-text-variant text-center bg-brand-surface-container/50 py-3 rounded-xl border border-brand-outline/50">
+                     You have reached the maximum limit of 3 addresses.
+                   </p>
+                 )}
                </div>
             )}
           </div>
 
-           <div className="bg-brand-surface-container/50 px-6 py-6 sm:px-8 sm:py-6 flex flex-col sm:flex-row justify-between items-center gap-6 sm:gap-0 border-t border-brand-outline">
-             <div className="flex text-xs font-medium text-brand-text-variant text-center sm:text-left">
-                <p>Private data will never be shared without your permission.</p>
-             </div>
-            <div className="flex gap-3 sm:gap-4 w-full sm:w-auto items-center">
-                <AnimatePresence>
-                  {showSuccess && (
-                    <motion.span 
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      className="text-sm font-bold text-brand-primary"
-                    >
-                      Successfully saved changes!
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-                <button type="button" className="flex-1 sm:flex-none px-6 py-2.5 text-sm font-semibold text-brand-text-variant hover:text-brand-text-main hover:bg-brand-text-variant/10 rounded-xl transition-colors">
+            <div className="bg-brand-surface-container/30 px-8 py-6 flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-brand-outline">
+              <div className="flex-1 text-xs font-medium text-brand-text-variant text-center sm:text-left">
+                 <AnimatePresence mode="wait">
+                   {showSuccess ? (
+                     <motion.span 
+                       initial={{ opacity: 0, y: 10 }}
+                       animate={{ opacity: 1, y: 0 }}
+                       exit={{ opacity: 0, y: -10 }}
+                       className="text-sm font-bold text-brand-primary block"
+                     >
+                       Successfully saved changes!
+                     </motion.span>
+                   ) : (
+                     <p>Private data will never be shared without your permission.</p>
+                   )}
+                 </AnimatePresence>
+              </div>
+              <div className="flex gap-3 items-center shrink-0">
+                <button type="button" className="px-6 py-2.5 text-sm font-semibold text-brand-text-variant hover:text-brand-text-main hover:bg-brand-text-variant/10 rounded-xl transition-colors">
                 Cancel
                 </button>
                 <button 
                   type="button" 
                   onClick={saveProfile}
-                  className="flex-1 sm:flex-none px-8 py-2.5 bg-brand-primary text-white text-sm font-semibold hover:bg-[#059669] transition-all shadow-lg hover:shadow-brand-primary/20 rounded-xl"
+                  className="px-8 py-2.5 bg-brand-primary text-white text-sm font-semibold hover:bg-[#059669] transition-all shadow-lg hover:shadow-brand-primary/20 rounded-xl active:scale-95 transition-all"
                 >
                 Save Changes
                 </button>
-            </div>
-          </div>
+              </div>
+           </div>
         </div>
       </motion.div>
+
+      <PasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} />
 
       <LegalModal 
         isOpen={legalModal.isOpen} 
         onClose={() => setLegalModal({ ...legalModal, isOpen: false })} 
         type={legalModal.type} 
       />
+
+      <AnimatePresence>
+        {isDeletingAccount && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeletingAccount(false)}
+              className="absolute inset-0 bg-brand-text-main/40 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-brand-surface rounded-[2.5rem] shadow-2xl border border-brand-outline p-8 lg:p-10"
+            >
+              <h2 className="text-2xl font-bold text-brand-text-main mb-2">Delete Account?</h2>
+              <p className="text-sm text-brand-text-variant mb-6">
+                This action is permanent and cannot be undone. To confirm, please type <span className="font-bold text-red-600">DELETE</span> below.
+              </p>
+              
+              <input 
+                type="text"
+                placeholder="Type DELETE to confirm"
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                className="w-full px-5 py-4 bg-brand-surface border-2 border-brand-outline rounded-2xl mb-6 focus:border-red-500 outline-none transition-all font-bold text-center tracking-widest"
+              />
+
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setIsDeletingAccount(false)}
+                  className="flex-1 py-4 bg-brand-surface border-2 border-brand-outline text-brand-text-main font-bold rounded-2xl hover:bg-brand-surface-card transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleDeleteAccount}
+                  disabled={deleteConfirmText !== 'DELETE'}
+                  className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all disabled:opacity-50 disabled:shadow-none"
+                >
+                  Delete Forever
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       
       <footer className="mt-16 flex justify-between border-t border-brand-outline pt-8">
         <div className="flex gap-8 text-xs text-brand-text-variant font-medium">
@@ -715,6 +951,56 @@ export const ClientProfileSettings = () => {
           <div className="w-1.5 h-1.5 rounded-full bg-brand-text-variant/20"></div>
         </div>
       </footer>
+    </div>
+  );
+};
+
+const BillingHistory = () => {
+  const [payments, setPayments] = React.useState<any[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    api.getBillingHistory().then(data => {
+      setPayments(data);
+      setIsLoading(false);
+    }).catch(() => setIsLoading(false));
+  }, []);
+
+  if (isLoading) return <div className="text-xs text-brand-text-variant italic">Loading history...</div>;
+
+  return (
+    <div>
+      <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-widest mb-4">Billing History</h3>
+      <div className="bg-brand-surface border-2 border-brand-outline rounded-2xl flex flex-col shadow-sm overflow-hidden">
+        {payments.length === 0 ? (
+          <div className="p-12 text-center text-brand-text-variant text-sm">No transactions yet.</div>
+        ) : (
+          <table className="w-full text-left text-sm border-collapse">
+            <thead className="bg-brand-surface-container border-b border-brand-outline text-brand-text-variant text-xs uppercase">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Date</th>
+                  <th className="px-6 py-4 font-semibold">Description</th>
+                  <th className="px-6 py-4 font-semibold">Amount</th>
+                  <th className="px-6 py-4 font-semibold">Status</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-brand-outline text-brand-text-main">
+                {payments.map(p => (
+                  <tr key={p.id} className="hover:bg-brand-surface-card transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-xs">{new Date(p.created_at).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 font-medium">{p.job_title} - Payment via {p.payment_method.toUpperCase()}</td>
+                    <td className="px-6 py-4">₱{p.amount.toLocaleString()}</td>
+                    <td className="px-6 py-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${p.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {p.status}
+                        </span>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 };

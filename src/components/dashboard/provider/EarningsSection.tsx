@@ -37,14 +37,14 @@ export const EarningsSection = () => {
           <button 
             onClick={() => {
               if (totalEarned > 0) {
-                alert(`Payout of ₱${totalEarned.toLocaleString()} requested to your ${paymentMethod === 'none' ? 'default account' : paymentMethod}.`);
+                alert(`Payout of ₱${totalEarned.toLocaleString()} requested to your ${paymentMethod === 'none' ? 'default account' : paymentMethod.toUpperCase()}.`);
               } else {
                 alert('No funds available for payout.');
               }
             }}
             className="px-6 py-2.5 bg-brand-primary text-white text-xs font-bold rounded-xl hover:bg-[#059669] transition-all shadow-sm"
           >
-            Cash Out
+            Withdraw
           </button>
         </div>
       </div>

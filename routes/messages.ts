@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import db, { notify } from '../db.js';
-import { authenticateToken, AuthRequest } from '../middleware/auth.js';
+import { authenticateToken, requireVerified, AuthRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
@@ -61,7 +61,7 @@ router.get('/:userId', authenticateToken, (req: AuthRequest, res: Response) => {
 });
 
 // Send a message
-router.post('/', authenticateToken, validate(sendMessageSchema), (req: AuthRequest, res: Response) => {
+router.post('/', authenticateToken, requireVerified, validate(sendMessageSchema), (req: AuthRequest, res: Response) => {
   const { receiver_id, job_id, content } = req.body;
 
   const receiver = db.prepare('SELECT id, full_name FROM users WHERE id = ?').get(receiver_id) as any;

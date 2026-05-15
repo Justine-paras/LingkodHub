@@ -19,7 +19,7 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
   const { service, location, q } = query.data;
 
   let sql = `
-    SELECT u.id, u.full_name, u.avatar_url, u.location, u.about_me, u.created_at, u.is_documents_verified,
+    SELECT u.id, u.full_name, u.username, u.avatar_url, u.location, u.about_me, u.created_at, u.is_documents_verified,
       GROUP_CONCAT(s.name, ', ') AS services
     FROM users u
     LEFT JOIN provider_services ps ON u.id = ps.provider_id
@@ -37,11 +37,7 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
     params.push(`%${location}%`);
   }
   if (q) {
-    sql += ` AND (
-      LOWER(u.full_name) LIKE LOWER(?) 
-      OR LOWER(u.about_me) LIKE LOWER(?)
-      OR u.id IN (SELECT ps3.provider_id FROM provider_services ps3 JOIN services s3 ON ps3.service_id = s3.id WHERE LOWER(s3.name) LIKE LOWER(?))
-    )`;
+    sql += ` AND (LOWER(u.full_name) LIKE LOWER(?) OR LOWER(u.username) LIKE LOWER(?) OR LOWER(u.about_me) LIKE LOWER(?))`;
     params.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
 
@@ -52,7 +48,7 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
 // Provider public profile
 router.get('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
   const provider = db.prepare(`
-    SELECT u.id, u.full_name, u.avatar_url, u.location, u.about_me, u.created_at, u.is_documents_verified,
+    SELECT u.id, u.full_name, u.username, u.avatar_url, u.location, u.about_me, u.created_at, u.is_documents_verified,
       GROUP_CONCAT(s.name, ', ') AS services
     FROM users u
     LEFT JOIN provider_services ps ON u.id = ps.provider_id

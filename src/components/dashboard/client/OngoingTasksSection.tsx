@@ -91,7 +91,7 @@ export const OngoingTasksSection = () => {
                            </span>
                         ) : (
                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-600 border border-green-100 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                              <Banknote size={10} /> Cash
+                              <Smartphone size={10} /> Maya
                            </span>
                         )}
                      </div>
@@ -177,7 +177,7 @@ export const OngoingTasksSection = () => {
                   </div>
                   <h3 className="text-2xl font-bold text-brand-text-main mb-4">Job finished?</h3>
                   <p className="text-brand-text-variant mb-8 text-sm leading-relaxed">
-                     Confirm you have settled the payment of <strong className="text-brand-text-main font-bold">₱{Number(showCompletionModal.budget || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> via <strong className="text-brand-text-main font-bold">{showCompletionModal.payment_method || 'cash'}</strong> to <strong className="text-brand-text-main font-bold">{showCompletionModal.provider_name || 'Assigned provider'}</strong>.
+                     Confirm you have settled the payment of <strong className="text-brand-text-main font-bold">₱{Number(showCompletionModal.budget || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> via <strong className="text-brand-text-main font-bold">{(showCompletionModal.payment_method || 'gcash').toUpperCase()}</strong> to <strong className="text-brand-text-main font-bold">{showCompletionModal.provider_name || 'Assigned provider'}</strong>.
                   </p>
                   
                   <div className="flex flex-col gap-3">

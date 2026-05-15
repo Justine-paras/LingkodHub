@@ -14,6 +14,8 @@ import ProviderDashboard from './pages/ProviderDashboard';
 import ServicesPage from './pages/ServicesPage';
 import AboutPage from './pages/AboutPage';
 
+import { ProtectedRoute } from './components/ProtectedRoute';
+
 export default function App() {
   const location = useLocation();
 
@@ -34,8 +36,23 @@ export default function App() {
         <Route path="/about" element={<AboutPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/client/dashboard" element={<ClientDashboard />} />
-        <Route path="/provider/dashboard" element={<ProviderDashboard />} />
+        
+        <Route 
+          path="/client/dashboard" 
+          element={
+            <ProtectedRoute allowedRole="client">
+              <ClientDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/provider/dashboard" 
+          element={
+            <ProtectedRoute allowedRole="provider">
+              <ProviderDashboard />
+            </ProtectedRoute>
+          } 
+        />
       </Routes>
     </>
   );

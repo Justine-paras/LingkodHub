@@ -4,7 +4,8 @@ import {
   Moon, 
   Bell, 
   HelpCircle, 
-  Settings 
+  Settings,
+  BadgeCheck 
 } from 'lucide-react';
 import { api } from '../../../services/api';
 
@@ -55,6 +56,18 @@ export const TopBar = ({ isDark, toggleTheme, role = 'client' }: { isDark: boole
         <div className="text-sm font-light text-brand-text-main tracking-wide">
            Welcome, <span className="font-semibold">{displayName}!</span>
         </div>
+        {userProfile && !userProfile.is_email_verified && (
+          <div className="hidden lg:flex items-center gap-2 px-4 py-1.5 bg-brand-accent/10 border border-brand-accent/20 rounded-full animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-accent"></span>
+            <span className="text-[10px] font-bold text-brand-accent uppercase tracking-wider">Account Unverified</span>
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('change-tab', { detail: 'profile' }))}
+              className="text-[10px] font-bold text-brand-text-main hover:underline decoration-brand-accent decoration-2"
+            >
+              Verify Email to unlock features
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
@@ -122,27 +135,38 @@ export const TopBar = ({ isDark, toggleTheme, role = 'client' }: { isDark: boole
                 </div>
               )}
             </div>
-            <button type="button" className="p-2 text-brand-primary hover:bg-brand-primary/10 rounded-full transition-colors">
-            <Settings size={18} />
-            </button>
         </div>
         <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-                <p className="text-sm text-brand-text-main font-medium">{displayName}</p>
-                <p className="text-xs text-brand-text-variant font-light">{role === 'client' ? 'Homeowner' : 'Service Provider'}</p>
+                <p className="text-sm text-brand-text-main font-medium flex items-center justify-end gap-1.5">
+                  {displayName}
+                  {userProfile?.is_email_verified === 1 && (
+                    <BadgeCheck size={14} className="text-brand-primary fill-brand-primary/10" />
+                  )}
+                </p>
+                <p className="text-xs text-brand-text-variant font-light">{userProfile?.username ? `@${userProfile.username}` : (role === 'client' ? 'Homeowner' : 'Service Provider')}</p>
             </div>
-            <div className="w-10 h-10 rounded-full border border-brand-outline p-0.5 overflow-hidden">
-                {displayAvatar ? (
-                  <img 
-                      src={displayAvatar} 
-                      alt="User" 
-                      className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-brand-primary/10 flex items-center justify-center text-brand-primary text-xs font-bold rounded-full">
-                    {initials}
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full border border-brand-outline p-0.5 overflow-hidden">
+                  {displayAvatar ? (
+                    <img 
+                        src={displayAvatar} 
+                        alt="User" 
+                        className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-brand-primary/10 flex items-center justify-center text-brand-primary text-xs font-bold rounded-full">
+                      {initials}
+                    </div>
+                  )}
+              </div>
+              {userProfile?.is_email_verified === 1 && (
+                <div className="absolute -bottom-1 -right-1 bg-brand-surface rounded-full p-0.5">
+                  <div className="bg-brand-primary rounded-full p-0.5 border border-brand-surface">
+                    <BadgeCheck size={8} className="text-white" />
                   </div>
-                )}
+                </div>
+              )}
             </div>
         </div>
       </div>

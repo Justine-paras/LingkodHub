@@ -32,8 +32,15 @@ export default function ClientDashboard() {
     const handleTabChange = (e: any) => {
       if (e.detail) setActiveTab(e.detail);
     };
+    const handleHireProvider = () => {
+      setActiveTab('jobs');
+    };
     window.addEventListener('change-tab', handleTabChange);
-    return () => window.removeEventListener('change-tab', handleTabChange);
+    window.addEventListener('hire-provider', handleHireProvider);
+    return () => {
+      window.removeEventListener('change-tab', handleTabChange);
+      window.removeEventListener('hire-provider', handleHireProvider);
+    };
   }, []);
 
   return (

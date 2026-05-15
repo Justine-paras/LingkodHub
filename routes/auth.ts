@@ -77,6 +77,7 @@ function revokeRefreshToken(token: string, replacedByToken?: string) {
 const registerSchema = z.object({
   role: z.enum(['client', 'provider']),
   full_name: z.string().min(2).max(100),
+  username: z.string().max(50).optional(),
   avatar_url: z.string().url().optional().or(z.literal('')),
   email: z.string().email(),
   password: z.string().min(8).max(128),
@@ -109,18 +110,18 @@ const authLimiter = rateLimit({
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 router.post('/register', authLimiter, validate(registerSchema), (req: Request, res: Response) => {
-  const { role, full_name, avatar_url, email, password, phone, location, about_me, payment_method } = req.body;
+  const { role, full_name, username, avatar_url, email, password, phone, location, about_me, payment_method } = req.body;
 
   try {
     const password_hash = bcrypt.hashSync(password, 10);
     const result = db.prepare(`
-      INSERT INTO users (role, full_name, avatar_url, email, password_hash, phone, location, about_me, payment_method)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(role, full_name, avatar_url || '', email,
+      INSERT INTO users (role, full_name, username, avatar_url, email, password_hash, phone, location, about_me, payment_method)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(role, full_name, username || '', avatar_url || '', email,
            password_hash, phone || '', location || '', about_me || '', payment_method || 'none');
 
     const user = db.prepare(
-      'SELECT id, role, full_name, avatar_url, email, payment_method FROM users WHERE id = ?'
+      'SELECT id, role, full_name, username, avatar_url, email, payment_method FROM users WHERE id = ?'
     ).get(result.lastInsertRowid) as any;
 
     const token = signAccessToken(user.id, user.role);
@@ -219,8 +220,9 @@ router.post('/send-otp', authenticateToken, async (req: AuthRequest, res: Respon
     .run(otp, expiresAt, req.user!.id);
 
   try {
-    await sendOTPEmail(user.email, otp);
-    res.json({ success: true, message: 'OTP sent successfully.' });
+    // Fire and forget email so the user doesn't wait for SMTP timeouts
+    sendOTPEmail(user.email, otp).catch(e => console.error('Background Email Error:', e));
+    res.json({ success: true, message: 'OTP sent successfully. Please check your email.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

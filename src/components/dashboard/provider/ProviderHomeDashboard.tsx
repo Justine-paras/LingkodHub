@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'framer-motion';
 import { 
   Clock, 
   Home, 
@@ -21,28 +21,30 @@ export const ProviderHomeDashboard = () => {
   const [historyJobs, setHistoryJobs] = React.useState<any[]>([]);
   const [availableJobs, setAvailableJobs] = React.useState<any[]>([]);
   const [stats, setStats] = React.useState({ avg_rating: 0, total_reviews: 0 });
-  const [invites, setInvites] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   
+  const [isEmailVerified, setIsEmailVerified] = React.useState(true);
+  const [isProfileLoading, setIsProfileLoading] = React.useState(true);
+
   React.useEffect(() => {
     const fetchData = async () => {
       try {
         const user = await api.getMe();
         setDisplayName(user.full_name);
+        setIsEmailVerified(!!user.is_email_verified);
+        setIsProfileLoading(false);
         
-        const [ongoing, history, available, reviews, invitesData] = await Promise.all([
+        const [ongoing, history, available, reviews] = await Promise.all([
           api.getJobsByView('ongoing'),
           api.getJobsByView('history'),
           api.getJobs(),
-          api.getUserReviews(user.id),
-          api.getInvites()
+          api.getUserReviews(user.id)
         ]);
 
         setOngoingJobs(ongoing);
         setHistoryJobs(history);
         setAvailableJobs(available);
         setStats(reviews);
-        setInvites(invitesData.filter((i: any) => i.status === 'pending'));
       } catch (error) {
         console.error('Failed to fetch dashboard data', error);
       } finally {
@@ -67,19 +69,6 @@ export const ProviderHomeDashboard = () => {
   }).reduce((sum, j) => sum + Number(j.budget || 0), 0);
 
   const completedCount = completedJobs.length;
- 
-  const handleInviteAction = async (inviteId: number, status: 'accepted' | 'rejected') => {
-    try {
-      await api.updateInviteStatus(inviteId, status);
-      setInvites(prev => prev.filter(i => i.id !== inviteId));
-      if (status === 'accepted') {
-         const ongoing = await api.getJobsByView('ongoing');
-         setOngoingJobs(ongoing);
-      }
-    } catch (error) {
-      console.error('Failed to update invite status', error);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -90,39 +79,61 @@ export const ProviderHomeDashboard = () => {
   }
 
   return (
-    <div className="flex flex-col h-full px-12 py-8 gap-10 max-w-[1400px] mx-auto w-full">
+    <div className="flex flex-col h-full px-12 py-8 gap-10 max-w-[1400px] mx-auto w-full relative">
+      {!isProfileLoading && !isEmailVerified && (
+        <div className="absolute inset-0 z-50 bg-brand-surface/60 backdrop-blur-sm flex items-center justify-center p-8 rounded-3xl">
+           <div className="bg-brand-surface-card border-2 border-brand-outline rounded-[2.5rem] p-10 max-w-lg text-center shadow-2xl">
+              <div className="w-20 h-20 bg-brand-accent/10 rounded-full flex items-center justify-center mx-auto mb-6 text-brand-accent">
+                 <User size={40} />
+              </div>
+              <h2 className="text-2xl font-bold text-brand-text-main mb-4">Verification Required</h2>
+              <p className="text-brand-text-variant mb-8 leading-relaxed">
+                 To start accepting jobs and offering your services, please verify your email address. This helps us ensure a safe marketplace for everyone.
+              </p>
+              <button 
+                onClick={() => window.dispatchEvent(new CustomEvent('change-tab', { detail: 'profile' }))}
+                className="w-full py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all"
+              >
+                Go to Verification
+              </button>
+           </div>
+        </div>
+      )}
+
       {/* Header section with personalized context */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <header className={`flex flex-col md:flex-row md:items-end justify-between gap-8 pb-4 ${!isEmailVerified ? 'opacity-50 pointer-events-none select-none' : ''}`}>
         <div>
-          <h1 className="text-4xl font-bold text-brand-text-main tracking-tight mb-2">Hello, {firstName}!</h1>
-          <p className="text-brand-text-variant font-medium flex items-center gap-2">
+          <h1 className="text-4xl font-extrabold text-brand-text-main tracking-tight mb-2">Hello, {firstName}!</h1>
+          <p className="text-brand-text-variant font-semibold flex items-center gap-2">
             You have <span className="text-brand-primary font-bold">{ongoingJobs.length} active jobs</span> currently.
             <span className="inline-flex items-center gap-1.5 ml-2">
               <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#059669] animate-pulse' : 'bg-gray-400'}`}></span>
-              <span className="text-[10px] uppercase font-bold tracking-widest">{isOnline ? 'Accepting Work' : 'Offline'}</span>
+              <span className="text-[10px] uppercase font-bold tracking-widest">{isOnline ? 'Active Now' : 'Offline'}</span>
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-3 bg-brand-surface-card border border-brand-outline p-1.5 rounded-2xl shadow-sm">
-          <div className="px-4 py-2 border-r border-brand-outline">
-            <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-0.5">Today's Revenue</p>
-            <p className="text-lg font-bold text-brand-text-main">₱{todayRevenue.toLocaleString()}</p>
+        <div className="flex items-center gap-4 bg-brand-surface-card border-2 border-brand-outline p-2 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow">
+          <div className="px-8 py-3 border-r border-brand-outline">
+            <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-1 opacity-70">Available Balance</p>
+            <p className="text-2xl font-black text-[#059669]">₱{lifetimeEarnings.toLocaleString()}</p>
           </div>
-          <button 
-            onClick={() => setIsOnline(!isOnline)}
-            className={`px-5 py-2 text-xs font-bold rounded-xl transition-all ${
-              isOnline 
-                ? 'bg-brand-primary text-white hover:bg-brand-primary/90' 
-                : 'bg-brand-surface border border-brand-outline text-brand-text-main hover:bg-brand-surface-card'
-            }`}
-          >
-            {isOnline ? 'Go Offline' : 'Go Active'}
-          </button>
+          <div className="px-6 py-2">
+            <button 
+               onClick={() => setIsOnline(!isOnline)}
+               className={`px-8 py-3 text-xs font-bold rounded-2xl transition-all shadow-sm ${
+               isOnline 
+                  ? 'bg-brand-primary text-white hover:bg-[#059669] shadow-brand-primary/20 hover:shadow-lg' 
+                  : 'bg-brand-surface border border-brand-outline text-brand-text-main hover:bg-brand-surface-card'
+               }`}
+            >
+               {isOnline ? 'Accepting Jobs' : 'Go Online'}
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Main Dashboard Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
+      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 w-full ${!isEmailVerified ? 'opacity-50 pointer-events-none select-none' : ''}`}>
         
         {/* Left Column: Priorities & Calendar (8 cols) */}
         <div className="lg:col-span-8 flex flex-col gap-8">
@@ -193,53 +204,6 @@ export const ProviderHomeDashboard = () => {
               </div>
             )}
           </section>
-
-          {/* Job Invitations */}
-          <AnimatePresence>
-            {invites.length > 0 && (
-              <motion.section
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-8 overflow-hidden"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-bold text-brand-text-main flex items-center gap-2">
-                    <Star size={20} className="text-brand-primary fill-brand-primary" /> Job Invitations
-                    <span className="bg-brand-primary text-white text-[10px] px-1.5 py-0.5 rounded-full">{invites.length}</span>
-                  </h2>
-                </div>
-                <div className="space-y-4">
-                  {invites.map((invite) => (
-                    <div key={invite.id} className="bg-brand-surface-card border-2 border-brand-primary/30 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div className="flex items-center gap-4">
-                        <img src={invite.client_avatar || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=100&h=100&auto=format&fit=crop"} className="w-12 h-12 rounded-full border border-brand-outline" alt="" />
-                        <div>
-                          <h3 className="font-bold text-brand-text-main">{invite.job_title}</h3>
-                          <p className="text-xs text-brand-text-variant font-medium">Invited by {invite.client_name}</p>
-                          {invite.offered_price && <p className="text-sm font-bold text-[#059669] mt-1">Offered: ₱{invite.offered_price.toLocaleString()}</p>}
-                        </div>
-                      </div>
-                      <div className="flex gap-3">
-                        <button 
-                          onClick={() => handleInviteAction(invite.id, 'rejected')}
-                          className="px-4 py-2 text-xs font-bold text-brand-text-variant hover:text-red-500 transition-colors"
-                        >
-                          Decline
-                        </button>
-                        <button 
-                          onClick={() => handleInviteAction(invite.id, 'accepted')}
-                          className="px-6 py-2.5 bg-brand-primary text-white text-xs font-bold rounded-xl hover:bg-[#059669] transition-all shadow-md"
-                        >
-                          Accept Invitation
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.section>
-            )}
-          </AnimatePresence>
 
           {/* New Opportunities */}
           <section>

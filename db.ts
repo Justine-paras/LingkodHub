@@ -17,6 +17,7 @@ export function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       role TEXT NOT NULL CHECK(role IN ('client', 'provider')),
       full_name TEXT NOT NULL,
+      username TEXT,
       avatar_url TEXT,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
@@ -113,18 +114,29 @@ export function initDb() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS job_invites (
+    CREATE TABLE IF NOT EXISTS payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       job_id INTEGER NOT NULL,
-      provider_id INTEGER NOT NULL,
       client_id INTEGER NOT NULL,
-      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected', 'cancelled')),
-      message TEXT,
-      offered_price REAL,
+      provider_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      payment_method TEXT NOT NULL CHECK(payment_method IN ('gcash', 'maya')),
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed', 'failed', 'refunded')),
+      transaction_reference TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
-      FOREIGN KEY (provider_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE CASCADE
+      FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (provider_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_addresses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      address_text TEXT NOT NULL,
+      is_default INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
 
@@ -170,6 +182,27 @@ export function initDb() {
     db.exec('ALTER TABLE users ADD COLUMN document_status TEXT DEFAULT "none"');
     db.exec('ALTER TABLE users ADD COLUMN verification_document_url TEXT');
     console.log('[db] Migration: added users.document_status columns');
+  }
+
+  if (!userCols.includes('pref_email_messages')) {
+    db.exec('ALTER TABLE users ADD COLUMN pref_email_messages INTEGER DEFAULT 1');
+    db.exec('ALTER TABLE users ADD COLUMN pref_email_updates INTEGER DEFAULT 1');
+    db.exec('ALTER TABLE users ADD COLUMN pref_email_promos INTEGER DEFAULT 0');
+    db.exec('ALTER TABLE users ADD COLUMN pref_push_alerts INTEGER DEFAULT 1');
+    db.exec('ALTER TABLE users ADD COLUMN pref_push_marketing INTEGER DEFAULT 0');
+    console.log('[db] Migration: added notification preference columns');
+  }
+
+  if (!userCols.includes('is_public_profile')) {
+    db.exec('ALTER TABLE users ADD COLUMN is_public_profile INTEGER DEFAULT 1');
+    db.exec('ALTER TABLE users ADD COLUMN show_online_status INTEGER DEFAULT 0');
+    console.log('[db] Migration: added visibility columns');
+  }
+
+  if (!userCols.includes('gcash_number')) {
+    db.exec('ALTER TABLE users ADD COLUMN gcash_number TEXT');
+    db.exec('ALTER TABLE users ADD COLUMN maya_number TEXT');
+    console.log('[db] Migration: added payment method columns');
   }
 
 

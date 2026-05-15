@@ -16,7 +16,6 @@ import providersRouter     from './routes/providers.js';
 import messagesRouter      from './routes/messages.js';
 import notificationsRouter from './routes/notifications.js';
 import supportRouter from './routes/support.js';
-import invitesRouter from './routes/invites.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -87,7 +86,6 @@ export async function createApp({ includeFrontend = process.env.NODE_ENV !== 'te
   app.use('/api/messages',      messagesRouter);
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/support',       supportRouter);
-  app.use('/api/invites',       invitesRouter);
   app.use('/api/users',         usersReviewRouter);  // /api/users/:id/reviews
 
   // ── Vite / Static Serving ──────────────────────────────────────────────────

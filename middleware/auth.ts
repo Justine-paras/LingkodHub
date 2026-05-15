@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
+import db from '../db.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,4 +46,20 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     req.user = decoded as JwtPayload;
     next();
   });
+};
+
+export const requireVerified = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    res.sendStatus(401);
+    return;
+  }
+  const user = db.prepare('SELECT is_email_verified FROM users WHERE id = ?').get(req.user.id) as any;
+  if (!user || !user.is_email_verified) {
+    res.status(403).json({ 
+      error: 'verification_required', 
+      message: 'Email verification required to access this feature.' 
+    });
+    return;
+  }
+  next();
 };

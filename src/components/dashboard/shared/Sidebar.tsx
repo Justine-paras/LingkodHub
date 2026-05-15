@@ -8,9 +8,11 @@ import {
   LogOut,
   HelpCircle,
   History,
-  Banknote
+  Banknote,
+  Settings
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { api } from '../../../services/api';
 
 const SidebarItem = ({ 
   icon: Icon, 
@@ -49,6 +51,23 @@ const SidebarItem = ({
 
 export const Sidebar = ({ activeTab, onTabChange, role = 'client' }: { activeTab: string, onTabChange: (tab: string) => void, role?: 'client' | 'provider' }) => {
   const navigate = useNavigate();
+  const [isEmailVerified, setIsEmailVerified] = React.useState(true);
+
+  React.useEffect(() => {
+    api.getMe().then(user => {
+      setIsEmailVerified(!!user.is_email_verified);
+    }).catch(console.error);
+  }, []);
+
+  const handleTabClick = (tab: string) => {
+    if (!isEmailVerified && ['jobs', 'tasks', 'offers', 'active-work', 'earnings'].includes(tab)) {
+      alert('Please verify your email address to access this feature.');
+      onTabChange('profile');
+      return;
+    }
+    onTabChange(tab);
+  };
+
   return (
     <aside className="w-[280px] h-screen fixed left-0 top-0 bg-brand-surface border-r border-brand-outline flex flex-col z-50">
       <div className="px-8 py-10">
@@ -76,7 +95,7 @@ export const Sidebar = ({ activeTab, onTabChange, role = 'client' }: { activeTab
           icon={Home} 
           label="Home" 
           active={activeTab === 'home'} 
-          onClick={() => onTabChange('home')} 
+          onClick={() => handleTabClick('home')} 
         />
         
         {role === 'client' ? (
@@ -85,13 +104,13 @@ export const Sidebar = ({ activeTab, onTabChange, role = 'client' }: { activeTab
               icon={FileText} 
               label="My Active Posts" 
               active={activeTab === 'jobs'} 
-              onClick={() => onTabChange('jobs')} 
+              onClick={() => handleTabClick('jobs')} 
             />
             <SidebarItem 
               icon={CheckSquare} 
               label="Ongoing Tasks" 
               active={activeTab === 'tasks'} 
-              onClick={() => onTabChange('tasks')} 
+              onClick={() => handleTabClick('tasks')} 
             />
           </>
         ) : (
@@ -100,19 +119,19 @@ export const Sidebar = ({ activeTab, onTabChange, role = 'client' }: { activeTab
               icon={FileText} 
               label="My Offers" 
               active={activeTab === 'offers'} 
-              onClick={() => onTabChange('offers')} 
+              onClick={() => handleTabClick('offers')} 
             />
             <SidebarItem 
               icon={CheckSquare} 
               label="Active Work" 
               active={activeTab === 'active-work'} 
-              onClick={() => onTabChange('active-work')} 
+              onClick={() => handleTabClick('active-work')} 
             />
             <SidebarItem 
               icon={Banknote} 
               label="Earnings" 
               active={activeTab === 'earnings'} 
-              onClick={() => onTabChange('earnings')} 
+              onClick={() => handleTabClick('earnings')} 
             />
           </>
         )}
@@ -120,26 +139,33 @@ export const Sidebar = ({ activeTab, onTabChange, role = 'client' }: { activeTab
           icon={History} 
           label="History" 
           active={activeTab === 'history'} 
-          onClick={() => onTabChange('history')} 
+          onClick={() => handleTabClick('history')} 
         />
         <SidebarItem 
           icon={HelpCircle} 
           label="Help & Safety" 
           active={activeTab === 'help'} 
-          onClick={() => onTabChange('help')} 
+          onClick={() => handleTabClick('help')} 
         />
         <SidebarItem 
-          icon={User} 
-          label="Profile" 
+          icon={Settings} 
+          label="Settings" 
           active={activeTab === 'profile'} 
-          onClick={() => onTabChange('profile')} 
+          onClick={() => handleTabClick('profile')} 
         />
       </nav>
 
       <div className="mt-auto px-6 py-8">
         <button 
           type="button"
-          onClick={() => navigate('/')} 
+          onClick={async () => {
+            try {
+              await api.logout();
+            } catch (err) {
+              console.error('Logout failed:', err);
+            }
+            navigate('/');
+          }} 
           className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-brand-text-variant hover:text-brand-text-main transition-colors"
         >
           <LogOut size={16} />

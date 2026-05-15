@@ -8,6 +8,7 @@ const router = Router();
 
 const applicationDecisionSchema = z.object({
   status: z.enum(['accepted', 'rejected']),
+  payment_method: z.string().optional(),
 });
 
 // Client accepts or rejects an application
@@ -17,7 +18,7 @@ router.put('/:id', authenticateToken, validate(applicationDecisionSchema), (req:
   }
 
   const application = db.prepare(`
-    SELECT a.*, j.client_id, j.status AS job_status, j.title AS job_title
+    SELECT a.*, j.client_id, j.status AS job_status, j.title AS job_title, j.budget
     FROM applications a JOIN jobs j ON a.job_id = j.id
     WHERE a.id = ?
   `).get(req.params.id) as any;
@@ -26,13 +27,22 @@ router.put('/:id', authenticateToken, validate(applicationDecisionSchema), (req:
   if (application.client_id !== req.user!.id) { res.status(403).json({ error: 'Forbidden.' }); return; }
   if (application.job_status !== 'pending')   { res.status(400).json({ error: 'This job is no longer accepting decisions.' }); return; }
 
-  const { status } = req.body;
+  const { status, payment_method } = req.body;
 
   if (status === 'accepted') {
     db.transaction(() => {
       db.prepare('UPDATE applications SET status = ? WHERE id = ?').run('accepted', application.id);
       db.prepare('UPDATE applications SET status = ? WHERE job_id = ? AND id != ?').run('rejected', application.job_id, application.id);
-      db.prepare('UPDATE jobs SET status = ?, provider_id = ? WHERE id = ?').run('in_progress', application.provider_id, application.job_id);
+      
+      const finalPaymentMethod = payment_method || 'gcash';
+      db.prepare('UPDATE jobs SET status = ?, provider_id = ?, payment_method = ? WHERE id = ?')
+        .run('in_progress', application.provider_id, finalPaymentMethod, application.job_id);
+
+      // Record transaction in payments table
+      db.prepare(`
+        INSERT INTO payments (job_id, client_id, provider_id, amount, payment_method, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(application.job_id, application.client_id, application.provider_id, application.budget, finalPaymentMethod, 'completed');
     })();
 
     notify(application.provider_id, 'application_accepted', 'Application Accepted! 🎉',

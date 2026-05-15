@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import db from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { sendEmail } from '../services/email.js';
 

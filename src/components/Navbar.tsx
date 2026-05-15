@@ -1,24 +1,35 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, ChevronRight } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Menu, X, ChevronRight, LogOut, LayoutDashboard } from 'lucide-react';
+import { api } from '../services/api';
 
 export default function Navbar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 10);
     };
     window.addEventListener('scroll', handleScroll);
+    
+    // Check auth state
+    api.getMe()
+      .then(u => setUser(u))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
+
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const navLinks = [
-    { label: 'Explore Services', path: '/services' },
-    { label: 'About Us', path: '/about' },
-    { label: 'How it works', path: '/#how-it-works' },
+    { label: 'Maghanap ng Serbisyo', path: '/services' },
+    { label: 'Tungkol sa Amin', path: '/about' },
+    { label: 'Paano Gumagana?', path: '/#how-it-works' },
   ];
 
   const isActive = (path: string) => {
@@ -37,10 +48,10 @@ export default function Navbar() {
       <nav className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-3 group relative z-50">
-          <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center shadow-lg shadow-[#22C55E]/20 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
+          <div className="w-10 h-10 bg-brand-primary rounded-xl flex items-center justify-center shadow-lg shadow-brand-primary/20 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
             <span className="text-white font-black text-xl leading-none">L</span>
           </div>
-          <span className="hidden sm:block text-2xl font-black tracking-tighter text-gray-900 group-hover:text-[#22C55E] transition-colors">
+          <span className="hidden sm:block text-2xl font-black tracking-tighter text-gray-900 group-hover:text-brand-primary transition-colors">
             Lingkod Hub
           </span>
         </Link>
@@ -53,7 +64,7 @@ export default function Navbar() {
               to={link.path}
               className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all ${
                 isActive(link.path)
-                  ? 'bg-white text-[#22C55E] shadow-sm ring-1 ring-black/5'
+                  ? 'bg-white text-brand-primary shadow-sm ring-1 ring-black/5'
                   : 'text-gray-500 hover:text-gray-900 hover:bg-white/50'
               }`}
             >
@@ -64,18 +75,45 @@ export default function Navbar() {
 
         {/* Desktop Actions */}
         <div className="hidden md:flex items-center gap-3">
-          <Link 
-            to="/login" 
-            className="text-sm font-bold text-gray-500 px-6 py-3 hover:text-gray-900 transition-all"
-          >
-            Sign In
-          </Link>
-          <Link 
-            to="/signup" 
-            className="text-sm font-bold text-white px-8 py-3.5 bg-gray-900 rounded-2xl shadow-xl shadow-black/10 hover:bg-[#22C55E] hover:-translate-y-1 transition-all active:translate-y-0 min-w-[140px] text-center"
-          >
-            Get Started
-          </Link>
+          {loading ? (
+            <div className="w-24 h-10 bg-gray-100 animate-pulse rounded-xl"></div>
+          ) : user ? (
+            <div className="flex items-center gap-4">
+              <Link 
+                to={user.role === 'provider' ? '/provider/dashboard' : '/client/dashboard'}
+                className="flex items-center gap-2 text-sm font-bold text-brand-primary bg-brand-primary/5 px-6 py-3 rounded-2xl hover:bg-brand-primary hover:text-white transition-all shadow-sm"
+              >
+                <LayoutDashboard size={18} />
+                Dashboard
+              </Link>
+              <button 
+                onClick={async () => {
+                  await api.logout();
+                  setUser(null);
+                  navigate('/');
+                }}
+                className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                title="Logout"
+              >
+                <LogOut size={20} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <Link 
+                to="/login" 
+                className="text-sm font-bold text-gray-500 px-6 py-3 hover:text-gray-900 transition-all"
+              >
+                Mag-login
+              </Link>
+              <Link 
+                to="/signup" 
+                className="text-sm font-bold text-white px-8 py-3.5 bg-gray-900 rounded-2xl shadow-xl shadow-black/10 hover:bg-brand-primary hover:-translate-y-1 transition-all active:translate-y-0 min-w-[140px] text-center"
+              >
+                Simulan Na
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile Toggle */}
@@ -102,7 +140,7 @@ export default function Navbar() {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center justify-between p-5 rounded-[2rem] text-lg font-bold group transition-all ${
                   isActive(link.path) 
-                    ? 'bg-[#22C55E] text-white shadow-xl shadow-[#22C55E]/20' 
+                    ? 'bg-brand-primary text-white shadow-xl shadow-brand-primary/20' 
                     : 'bg-gray-50 text-gray-900 active:scale-95'
                 }`}
               >
@@ -113,20 +151,47 @@ export default function Navbar() {
           </div>
           
           <div className="pt-6 border-t border-gray-100 space-y-4">
-            <Link 
-              to="/signup" 
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="flex items-center justify-center w-full py-5 bg-[#22C55E] text-white rounded-[1.5rem] font-black text-lg shadow-xl shadow-[#22C55E]/20"
-            >
-              Sign up for free
-            </Link>
-            <Link 
-              to="/login" 
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="flex items-center justify-center w-full py-5 bg-white border-2 border-gray-100 text-gray-900 rounded-[1.5rem] font-bold text-lg"
-            >
-              Log into account
-            </Link>
+            {loading ? (
+              <div className="w-full h-14 bg-gray-50 animate-pulse rounded-2xl"></div>
+            ) : user ? (
+              <>
+                <Link 
+                  to={user.role === 'provider' ? '/provider/dashboard' : '/client/dashboard'}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center justify-center w-full py-5 bg-brand-primary text-white rounded-[1.5rem] font-black text-lg shadow-xl shadow-brand-primary/20"
+                >
+                  Pumunta sa Dashboard
+                </Link>
+                <button 
+                  onClick={async () => {
+                    await api.logout();
+                    setUser(null);
+                    setIsMobileMenuOpen(false);
+                    navigate('/');
+                  }}
+                  className="flex items-center justify-center w-full py-5 bg-white border-2 border-red-100 text-red-500 rounded-[1.5rem] font-bold text-lg"
+                >
+                  Logout ng Account
+                </button>
+              </>
+            ) : (
+              <>
+                <Link 
+                  to="/signup" 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center justify-center w-full py-5 bg-brand-primary text-white rounded-[1.5rem] font-black text-lg shadow-xl shadow-brand-primary/20"
+                >
+                  Mag-register na (Libre lang!)
+                </Link>
+                <Link 
+                  to="/login" 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center justify-center w-full py-5 bg-white border-2 border-gray-100 text-gray-900 rounded-[1.5rem] font-bold text-lg"
+                >
+                  Login sa Account
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

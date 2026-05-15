@@ -28,7 +28,7 @@ export const HistorySection = () => {
           worker: me.role === 'provider' ? job.client_name : job.provider_name,
           workerAvatar: me.role === 'provider' ? job.client_avatar : job.provider_avatar,
           amount: Number(job.budget || 0),
-          paymentMethod: job.payment_method || 'cash',
+          paymentMethod: job.payment_method || 'gcash',
           status: job.status === 'completed' ? 'Completed' : 'Cancelled',
           description: job.description || '',
           review: '',
@@ -133,15 +133,15 @@ export const HistorySection = () => {
                               ₱{job.amount.toFixed(2)}
                            </td>
                            <td className="px-6 py-5 whitespace-nowrap text-center">
-                              {job.paymentMethod === 'GCash' ? (
-                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 border border-blue-100 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                                    <Smartphone size={10} /> GCash
-                                 </span>
-                              ) : (
-                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-600 border border-green-100 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                                    <Banknote size={10} /> Cash
-                                 </span>
-                              )}
+                               {String(job.paymentMethod).toLowerCase() === 'gcash' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 border border-blue-100 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                     <Smartphone size={10} /> GCash
+                                  </span>
+                               ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-600 border border-green-100 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                     <Smartphone size={10} /> Maya
+                                  </span>
+                               )}
                            </td>
                            <td className="px-6 py-5 whitespace-nowrap text-right">
                               {job.status === 'Completed' ? (

@@ -47,7 +47,6 @@ export default function SignupPage() {
     services: [] as string[],
     agreedToTOS: false,
     idType: 'National ID',
-    paymentMethod: 'later',
   });
 
   const [isTOSOpen, setIsTOSOpen] = React.useState(false);
@@ -75,8 +74,7 @@ export default function SignupPage() {
         password: formData.password,
         phone: formData.phone || '',
         location: formData.region || '',
-        about_me: formData.aboutMe || '',
-        payment_method: formData.paymentMethod || 'none'
+        about_me: formData.aboutMe || ''
       });
 
       if (formData.avatarFile) {
@@ -102,7 +100,7 @@ export default function SignupPage() {
     }
   };
 
-  const stepsCount = accountType === 'provider' ? 5 : 4;
+  const stepsCount = accountType === 'provider' ? 5 : 3;
 
   const toggleService = (service: string) => {
     const current = formData.services;
@@ -390,7 +388,7 @@ export default function SignupPage() {
                     {step === 3 && accountType === 'provider' && "Define your service area and expertise"}
                     {step === 4 && accountType === 'provider' && "Verify your identity for platform safety"}
                     {step === 5 && accountType === 'provider' && "Review our professional standards"}
-                    {step === 4 && accountType === 'client' && "Setup your payment method"}
+                    {step === 3 && accountType === 'client' && "Setup your basic profile"}
                   </p>
                 </div>
 
@@ -679,103 +677,16 @@ export default function SignupPage() {
                           </button>
                           <button 
                             type="button" 
-                            onClick={nextStep}
-                            className="flex-[2] py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                          >
-                            Next: Payment Method <ChevronRight size={18} />
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {step === 4 && accountType === 'client' && (
-                      <motion.div 
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        className="space-y-6"
-                      >
-                        <div className="space-y-4">
-                          <label 
-                            onClick={() => setFormData({...formData, paymentMethod: 'credit_card'})}
-                            className={`flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all ${
-                            formData.paymentMethod === 'credit_card' ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline hover:border-brand-primary/50'
-                          }`}>
-                            <div className="flex-1">
-                              <h4 className="font-bold text-brand-text-main text-sm">Credit Card</h4>
-                              <p className="text-[10px] font-medium text-brand-text-variant">Pay securely via Stripe</p>
-                            </div>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                              formData.paymentMethod === 'credit_card' ? 'border-brand-primary' : 'border-brand-outline'
-                            }`}>
-                              {formData.paymentMethod === 'credit_card' && <div className="w-2.5 h-2.5 rounded-full bg-brand-primary" />}
-                            </div>
-                          </label>
-
-                          <label 
-                            onClick={() => setFormData({...formData, paymentMethod: 'gcash'})}
-                            className={`flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all ${
-                            formData.paymentMethod === 'gcash' ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline hover:border-brand-primary/50'
-                          }`}>
-                            <div className="flex-1">
-                              <h4 className="font-bold text-brand-text-main text-sm">GCash</h4>
-                              <p className="text-[10px] font-medium text-brand-text-variant">Connect your e-wallet</p>
-                            </div>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                              formData.paymentMethod === 'gcash' ? 'border-brand-primary' : 'border-brand-outline'
-                            }`}>
-                              {formData.paymentMethod === 'gcash' && <div className="w-2.5 h-2.5 rounded-full bg-brand-primary" />}
-                            </div>
-                          </label>
-
-                          <label 
-                            onClick={() => setFormData({...formData, paymentMethod: 'later'})}
-                            className={`flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all ${
-                            formData.paymentMethod === 'later' ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline hover:border-brand-primary/50'
-                          }`}>
-                            <div className="flex-1">
-                              <h4 className="font-bold text-brand-text-main text-sm">Set up later</h4>
-                              <p className="text-[10px] font-medium text-brand-text-variant">I'll do this later from my dashboard</p>
-                            </div>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                              formData.paymentMethod === 'later' ? 'border-brand-primary' : 'border-brand-outline'
-                            }`}>
-                              {formData.paymentMethod === 'later' && <div className="w-2.5 h-2.5 rounded-full bg-brand-primary" />}
-                            </div>
-                          </label>
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                          <button 
-                            type="button" 
                             onClick={handleSignup}
-                            className="w-full py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all flex items-center justify-center gap-2"
+                            className="flex-[2] py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                           >
                             Complete Registration <ChevronRight size={18} />
                           </button>
-                          
-                          <div className="flex gap-4">
-                            <button 
-                              type="button" 
-                              onClick={prevStep}
-                              className="flex-1 py-3 bg-brand-surface border border-brand-outline text-brand-text-variant text-xs font-bold rounded-xl hover:bg-brand-surface-card transition-all"
-                            >
-                              Back
-                            </button>
-                            <button 
-                              type="button" 
-                              onClick={() => {
-                                setFormData({...formData, paymentMethod: 'later'});
-                                handleSignup(new Event('submit') as any);
-                              }}
-                              className="flex-1 py-3 text-brand-primary text-xs font-bold rounded-xl hover:bg-brand-primary/5 transition-all"
-                            >
-                              Skip for now
-                            </button>
-                          </div>
                         </div>
                       </motion.div>
                     )}
+
+
 
                     {step === 3 && accountType === 'provider' && (
                       <motion.div 

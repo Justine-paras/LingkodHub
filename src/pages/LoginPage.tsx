@@ -7,6 +7,18 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  React.useEffect(() => {
+    api.getMe().then(user => {
+      if (user.role === 'provider') {
+        navigate('/provider/dashboard');
+      } else {
+        navigate('/client/dashboard');
+      }
+    }).catch(() => {
+      // Not logged in, stay here
+    });
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -59,7 +71,6 @@ export default function LoginPage() {
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="block text-sm font-semibold text-brand-text-main">Password</label>
-              <a href="#" className="text-xs font-semibold text-brand-primary hover:text-brand-primary/80">Forgot password?</a>
             </div>
             <input 
               name="password"

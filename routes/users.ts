@@ -11,22 +11,39 @@ const router = Router();
 
 const updateMeSchema = z.object({
   full_name:  z.string().min(2).max(100).optional(),
+  username:   z.string().max(50).optional(),
   avatar_url: z.string().optional().or(z.literal('')),
   phone:      z.string().max(30).optional(),
   location:   z.string().max(150).optional(),
   about_me:   z.string().max(500).optional(),
   service_radius: z.number().int().min(1).max(100).optional(),
+  pref_email_messages: z.number().int().min(0).max(1).optional(),
+  pref_email_updates: z.number().int().min(0).max(1).optional(),
+  pref_email_promos: z.number().int().min(0).max(1).optional(),
+  pref_push_alerts: z.number().int().min(0).max(1).optional(),
+  pref_push_marketing: z.number().int().min(0).max(1).optional(),
+  is_public_profile: z.number().int().min(0).max(1).optional(),
+  show_online_status: z.number().int().min(0).max(1).optional(),
+  gcash_number: z.string().max(20).optional().or(z.literal('')),
+  maya_number: z.string().max(20).optional().or(z.literal('')),
+  payment_method: z.string().max(50).optional().or(z.literal('')),
 });
 
 const updateServicesSchema = z.object({
   services: z.array(z.string().min(1).max(100)).max(50),
 });
 
+const addressSchema = z.object({
+  label: z.string().min(1).max(50),
+  address_text: z.string().min(5).max(255),
+  is_default: z.number().int().min(0).max(1).optional(),
+});
+
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
 router.get('/me', authenticateToken, (req: AuthRequest, res: Response) => {
   const user = db.prepare(
-    'SELECT id, role, full_name, avatar_url, email, phone, location, about_me, payment_method, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, created_at FROM users WHERE id = ?'
+    'SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?'
   ).get(req.user!.id);
   if (!user) { res.status(404).json({ error: 'User not found.' }); return; }
   res.json(user);
@@ -45,17 +62,32 @@ router.post('/me/avatar', authenticateToken, upload.single('avatar'), (req: Auth
 });
 
 router.put('/me', authenticateToken, validate(updateMeSchema), (req: AuthRequest, res: Response) => {
-  const { full_name, avatar_url, phone, location, about_me, service_radius } = req.body;
+  const { 
+    full_name, username, avatar_url, phone, location, about_me, service_radius,
+    pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing,
+    is_public_profile, show_online_status, gcash_number, maya_number, payment_method
+  } = req.body;
 
   const updates: string[] = [];
   const params: any[]     = [];
 
   if (full_name  !== undefined) { updates.push('full_name = ?');  params.push(full_name); }
+  if (username   !== undefined) { updates.push('username = ?');   params.push(username); }
   if (avatar_url !== undefined) { updates.push('avatar_url = ?'); params.push(avatar_url); }
   if (phone      !== undefined) { updates.push('phone = ?');      params.push(phone); }
   if (location   !== undefined) { updates.push('location = ?');   params.push(location); }
   if (about_me   !== undefined) { updates.push('about_me = ?');   params.push(about_me); }
   if (service_radius !== undefined) { updates.push('service_radius = ?'); params.push(service_radius); }
+  if (pref_email_messages !== undefined) { updates.push('pref_email_messages = ?'); params.push(pref_email_messages); }
+  if (pref_email_updates !== undefined) { updates.push('pref_email_updates = ?'); params.push(pref_email_updates); }
+  if (pref_email_promos !== undefined) { updates.push('pref_email_promos = ?'); params.push(pref_email_promos); }
+  if (pref_push_alerts !== undefined) { updates.push('pref_push_alerts = ?'); params.push(pref_push_alerts); }
+  if (pref_push_marketing !== undefined) { updates.push('pref_push_marketing = ?'); params.push(pref_push_marketing); }
+  if (is_public_profile !== undefined) { updates.push('is_public_profile = ?'); params.push(is_public_profile); }
+  if (show_online_status !== undefined) { updates.push('show_online_status = ?'); params.push(show_online_status); }
+  if (gcash_number !== undefined) { updates.push('gcash_number = ?'); params.push(gcash_number); }
+  if (maya_number !== undefined) { updates.push('maya_number = ?'); params.push(maya_number); }
+  if (payment_method !== undefined) { updates.push('payment_method = ?'); params.push(payment_method); }
 
   if (updates.length > 0) {
     params.push(req.user!.id);
@@ -63,8 +95,19 @@ router.put('/me', authenticateToken, validate(updateMeSchema), (req: AuthRequest
   }
 
   res.json(db.prepare(
-    'SELECT id, role, full_name, avatar_url, email, phone, location, about_me, payment_method, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, created_at FROM users WHERE id = ?'
+    'SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?'
   ).get(req.user!.id));
+});
+
+router.get('/me/billing', authenticateToken, (req: AuthRequest, res: Response) => {
+  const payments = db.prepare(`
+    SELECT p.*, j.title AS job_title
+    FROM payments p
+    JOIN jobs j ON p.job_id = j.id
+    WHERE p.client_id = ? OR p.provider_id = ?
+    ORDER BY p.created_at DESC
+  `).all(req.user!.id, req.user!.id);
+  res.json(payments);
 });
 
 // ─── Services ─────────────────────────────────────────────────────────────────
@@ -108,6 +151,28 @@ router.post('/me/services', authenticateToken, validate(updateServicesSchema), (
   res.json({ success: true });
 });
 
+router.delete('/me', authenticateToken, (req: AuthRequest, res: Response) => {
+  try {
+    db.transaction(() => {
+      // 1. Clean up references that might not cascade correctly
+      db.prepare('UPDATE jobs SET provider_id = NULL WHERE provider_id = ?').run(req.user!.id);
+      
+      // 2. Delete the user (other tables should cascade)
+      db.prepare('DELETE FROM users WHERE id = ?').run(req.user!.id);
+    })();
+
+    // 3. Clear auth cookies
+    const base = { httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', path: '/' };
+    res.clearCookie('access_token', base);
+    res.clearCookie('refresh_token', base);
+    
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[DeleteAccount Error]:', err);
+    res.status(500).json({ error: 'Failed to delete account due to a database constraint.' });
+  }
+});
+
 // ─── My Applications ──────────────────────────────────────────────────────────
 
 router.get('/me/applications', authenticateToken, (req: AuthRequest, res: Response) => {
@@ -136,10 +201,55 @@ router.post('/me/documents', authenticateToken, upload.single('document'), (req:
   const docUrl = `/uploads/${req.file.filename}`;
   db.prepare('UPDATE users SET verification_document_url = ?, document_status = "pending" WHERE id = ?').run(docUrl, req.user!.id);
  
-  db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)')
+  db.prepare('INSERT INTO notifications (user_id, title, body, type) VALUES (?, ?, ?, ?)')
     .run(req.user!.id, 'Documents Submitted', 'Your identity documents have been submitted and are under review.', 'info');
 
   res.json({ document_url: docUrl, status: 'pending' });
+});
+
+// ─── Addresses ────────────────────────────────────────────────────────────────
+
+router.get('/me/addresses', authenticateToken, (req: AuthRequest, res: Response) => {
+  const addresses = db.prepare('SELECT * FROM user_addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC').all(req.user!.id);
+  res.json(addresses);
+});
+
+router.post('/me/addresses', authenticateToken, validate(addressSchema), (req: AuthRequest, res: Response) => {
+  const { label, address_text, is_default } = req.body;
+  
+  // Check max 3 addresses
+  const count = db.prepare('SELECT COUNT(*) as count FROM user_addresses WHERE user_id = ?').get(req.user!.id) as { count: number };
+  if (count.count >= 3) {
+    res.status(400).json({ error: 'You can only have a maximum of 3 saved addresses.' });
+    return;
+  }
+
+  db.transaction(() => {
+    if (is_default) {
+      db.prepare('UPDATE user_addresses SET is_default = 0 WHERE user_id = ?').run(req.user!.id);
+    }
+    db.prepare('INSERT INTO user_addresses (user_id, label, address_text, is_default) VALUES (?, ?, ?, ?)')
+      .run(req.user!.id, label, address_text, is_default || 0);
+  })();
+
+  res.json({ success: true });
+});
+
+router.delete('/me/addresses/:id', authenticateToken, (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  db.prepare('DELETE FROM user_addresses WHERE id = ? AND user_id = ?').run(id, req.user!.id);
+  res.json({ success: true });
+});
+
+router.patch('/me/addresses/:id/default', authenticateToken, (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  
+  db.transaction(() => {
+    db.prepare('UPDATE user_addresses SET is_default = 0 WHERE user_id = ?').run(req.user!.id);
+    db.prepare('UPDATE user_addresses SET is_default = 1 WHERE id = ? AND user_id = ?').run(id, req.user!.id);
+  })();
+
+  res.json({ success: true });
 });
 
 export default router;
