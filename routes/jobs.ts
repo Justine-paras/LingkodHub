@@ -11,11 +11,14 @@ const router = Router();
 const createJobSchema = z.object({
   title:          z.string().min(3).max(200),
   description:    z.string().max(2000).optional(),
+  category:       z.string().optional().nullable(),
   location:       z.string().min(2).max(150),
   budget:         z.number().positive().max(1_000_000),
   is_negotiable:  z.boolean().optional().default(false),
+  is_urgent:      z.boolean().optional().default(false),
   payment_method: z.enum(['gcash', 'maya']).optional().default('gcash'),
-  provider_id:    z.number().optional(),
+  provider_id:    z.number().optional().nullable(),
+  scheduled_at:   z.string().optional().nullable(),
 });
 
 const updateJobStatusSchema = z.object({
@@ -58,7 +61,7 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
     sql += ' ORDER BY j.created_at DESC';
     res.json(db.prepare(sql).all(...params));
   } else {
-    if (view === 'assigned' || view === 'history' || view === 'ongoing') {
+    if (view === 'assigned' || view === 'history' || view === 'ongoing' || status) {
       let sql = `
         SELECT j.*, u.full_name AS client_name, u.avatar_url AS client_avatar, u.phone AS client_phone
         FROM jobs j
@@ -74,6 +77,8 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
         sql += " AND j.status IN ('completed', 'cancelled')";
       } else if (view === 'ongoing') {
         sql += " AND j.status = 'in_progress'";
+      } else if (view === 'assigned') {
+        sql += " AND j.status IN ('pending', 'in_progress')";
       } else {
         sql += " AND j.status IN ('in_progress', 'completed', 'cancelled')";
       }
@@ -83,15 +88,16 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
       return;
     }
 
-    // Provider sees pending jobs they haven't applied to yet
+    // Provider sees pending jobs: either public or specifically assigned to them
     res.json(db.prepare(`
       SELECT j.*, u.full_name AS client_name, u.avatar_url AS client_avatar
       FROM jobs j
       JOIN users u ON j.client_id = u.id
       WHERE j.status = 'pending'
+        AND (j.provider_id IS NULL OR j.provider_id = ?)
         AND j.id NOT IN (SELECT job_id FROM applications WHERE provider_id = ?)
       ORDER BY j.created_at DESC
-    `).all(req.user!.id));
+    `).all(req.user!.id, req.user!.id));
   }
 });
 
@@ -99,17 +105,72 @@ router.post('/', authenticateToken, requireVerified, validate(createJobSchema), 
   if (req.user!.role !== 'client') {
     res.status(403).json({ error: 'Only clients can create jobs.' }); return;
   }
-  const { title, description, location, budget, is_negotiable, payment_method, provider_id } = req.body;
+  const { title, description, category, location, budget, is_negotiable, is_urgent, payment_method, provider_id, scheduled_at } = req.body;
   const result = db.prepare(`
-    INSERT INTO jobs (client_id, title, description, location, budget, is_negotiable, payment_method, provider_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(req.user!.id, title, description ?? '', location, budget, is_negotiable ? 1 : 0, payment_method ?? 'gcash', provider_id || null);
+    INSERT INTO jobs (client_id, title, description, category, location, budget, is_negotiable, is_urgent, payment_method, provider_id, scheduled_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    req.user!.id, 
+    title, 
+    description ?? '', 
+    category || 'General',
+    location, 
+    budget, 
+    is_negotiable ? 1 : 0, 
+    is_urgent ? 1 : 0,
+    payment_method ?? 'gcash', 
+    provider_id || null,
+    scheduled_at || null
+  );
 
   if (provider_id) {
     notify(provider_id, 'job_invitation', 'New Job Invitation', `You have been invited to a new job: "${title}".`, Number(result.lastInsertRowid));
   }
 
   res.status(201).json(db.prepare('SELECT * FROM jobs WHERE id = ?').get(result.lastInsertRowid));
+});
+
+// ─── Bulk Actions ─────────────────────────────────────────────────────────────
+router.post('/bulk-delete', authenticateToken, (req: AuthRequest, res: Response) => {
+  const { ids } = req.body;
+  console.log(`[jobs] Bulk delete request for IDs:`, ids, 'by user:', req.user!.id);
+  
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: 'IDs array is required.' }); return;
+  }
+
+  try {
+    const results = db.transaction(() => {
+      let deletedCount = 0;
+      for (const id of ids) {
+        const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as any;
+        if (!job) {
+          console.log(`[jobs] Job ${id} not found for deletion`);
+          continue;
+        }
+
+        const isClient   = job.client_id   === req.user!.id;
+        const isProvider = job.provider_id === req.user!.id;
+        
+        // Providers can only delete completed/cancelled. Clients can delete pending/completed/cancelled.
+        const canDelete  = isClient || (isProvider && ['completed', 'cancelled'].includes(job.status));
+
+        if (canDelete && ['pending', 'completed', 'cancelled'].includes(job.status)) {
+          db.prepare('DELETE FROM jobs WHERE id = ?').run(id);
+          deletedCount++;
+        } else {
+          console.log(`[jobs] User ${req.user!.id} cannot delete job ${id} (status: ${job.status}, role: ${req.user!.role})`);
+        }
+      }
+      return deletedCount;
+    })();
+
+    console.log(`[jobs] Bulk delete success. Deleted ${results} items.`);
+    res.json({ success: true, deletedCount: results });
+  } catch (err) {
+    console.error('[jobs] Bulk delete error:', err);
+    res.status(500).json({ error: 'Failed to perform bulk deletion.' });
+  }
 });
 
 // ─── Single Job ───────────────────────────────────────────────────────────────
@@ -135,13 +196,20 @@ router.get('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
 });
 
 router.delete('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
-  if (req.user!.role !== 'client') {
-    res.status(403).json({ error: 'Only clients can delete jobs.' }); return;
-  }
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id) as any;
-  if (!job)                          { res.status(404).json({ error: 'Job not found.' }); return; }
-  if (job.client_id !== req.user!.id){ res.status(403).json({ error: 'Forbidden.' }); return; }
-  if (job.status !== 'pending')       { res.status(400).json({ error: 'Only pending jobs can be deleted.' }); return; }
+  if (!job) { res.status(404).json({ error: 'Job not found.' }); return; }
+
+  const isClient   = job.client_id   === req.user!.id;
+  const isProvider = job.provider_id === req.user!.id;
+  if (!isClient && !isProvider) { res.status(403).json({ error: 'Forbidden.' }); return; }
+  
+  // Providers can only delete completed/cancelled jobs. Clients can delete pending too.
+  const canDelete = isClient || (isProvider && ['completed', 'cancelled'].includes(job.status));
+  if (!canDelete) { res.status(403).json({ error: 'Providers can only delete completed or cancelled jobs.' }); return; }
+  
+  if (!['pending', 'completed', 'cancelled'].includes(job.status)) {
+    res.status(400).json({ error: 'Only pending, completed, or cancelled jobs can be deleted.' }); return;
+  }
 
   db.prepare('DELETE FROM jobs WHERE id = ?').run(req.params.id);
   res.json({ success: true });
@@ -159,7 +227,7 @@ router.put('/:id/status', authenticateToken, validate(updateJobStatusSchema), (r
   if (!isClient && !isProvider) { res.status(403).json({ error: 'Forbidden.' }); return; }
 
   const allowed: Record<string, string[]> = {
-    pending:     ['cancelled'],
+    pending:     ['in_progress', 'cancelled'],
     in_progress: ['completed', 'cancelled'],
     completed:   [],
     cancelled:   [],

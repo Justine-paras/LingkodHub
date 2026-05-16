@@ -8,9 +8,30 @@ import { api } from '../../../services/api';
 export const ProviderBidsSection = () => {
   const [offers, setOffers] = React.useState<any[]>([]);
 
-  React.useEffect(() => {
-    api.getMyApplications().then(setOffers).catch(console.error);
+  const fetchOffers = React.useCallback(() => {
+    api.getMyApplications()
+      .then((apps) => {
+        const appsList = Array.isArray(apps) ? apps : [];
+
+        // Only show offers for jobs that are active or ongoing (pending, open, active, in_progress)
+        const validStatuses = ['pending', 'open', 'active', 'in_progress'];
+        setOffers(appsList.filter((a: any) => validStatuses.includes(a.job_status)));
+      })
+      .catch(console.error);
   }, []);
+
+  React.useEffect(() => {
+    fetchOffers();
+
+    const channel = new BroadcastChannel('dashboard_sync');
+    channel.onmessage = (event) => {
+      if (event.data.type === 'DATA_UPDATED') {
+        fetchOffers();
+      }
+    };
+
+    return () => channel.close();
+  }, [fetchOffers]);
 
   return (
     <div className="max-w-5xl mx-auto py-12 px-12 w-full">
@@ -52,22 +73,28 @@ export const ProviderBidsSection = () => {
                 >
                   <Phone size={20} />
                 </button>
-                <button 
-                  onClick={async () => {
-                    if (confirm('Are you sure you want to withdraw this offer?')) {
-                      try {
-                        await api.deleteApplication(offer.id);
-                        setOffers(prev => prev.filter(o => o.id !== offer.id));
-                      } catch (err) {
-                        console.error(err);
-                        alert('Failed to withdraw offer.');
+                {offer.status === 'pending' && (
+                  <button 
+                    onClick={async () => {
+                      if (confirm('Are you sure you want to cancel this offer?')) {
+                        try {
+                          await api.deleteApplication(offer.id);
+                          setOffers(prev => prev.filter(o => o.id !== offer.id));
+                          
+                          const channel = new BroadcastChannel('dashboard_sync');
+                          channel.postMessage({ type: 'DATA_UPDATED' });
+                          channel.close();
+                        } catch (err) {
+                          console.error(err);
+                          alert('Failed to cancel offer.');
+                        }
                       }
-                    }
-                  }}
-                  className="px-6 py-2.5 bg-brand-surface border border-brand-outline text-brand-text-variant hover:text-red-500 hover:border-red-100 rounded-xl font-bold text-xs transition-colors"
-                >
-                  Withdraw
-                </button>
+                    }}
+                    className="px-6 py-2.5 bg-brand-surface border border-brand-outline text-brand-text-variant hover:text-red-500 hover:border-red-100 rounded-xl font-bold text-xs transition-colors"
+                  >
+                    Cancel Offer
+                  </button>
+                )}
               </div>
             </div>
           </div>

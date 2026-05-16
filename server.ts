@@ -42,9 +42,9 @@ usersReviewRouter.get('/:id/reviews', authenticateToken, (_req: Request, res: Re
     FROM reviews r
     JOIN users reviewer ON r.reviewer_id = reviewer.id
     JOIN jobs j ON r.job_id = j.id
-    WHERE r.reviewee_id = ?
+    WHERE r.reviewee_id = ? OR r.reviewer_id = ?
     ORDER BY r.created_at DESC
-  `).all(_req.params.id);
+  `).all(_req.params.id, _req.params.id);
 
   const avg = db.prepare(
     'SELECT AVG(rating) AS avg_rating, COUNT(*) AS total FROM reviews WHERE reviewee_id = ?'

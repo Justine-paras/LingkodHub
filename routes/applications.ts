@@ -36,7 +36,7 @@ router.put('/:id', authenticateToken, validate(applicationDecisionSchema), (req:
       
       const finalPaymentMethod = payment_method || 'gcash';
       db.prepare('UPDATE jobs SET status = ?, provider_id = ?, payment_method = ? WHERE id = ?')
-        .run('in_progress', application.provider_id, finalPaymentMethod, application.job_id);
+        .run('pending', application.provider_id, finalPaymentMethod, application.job_id);
 
       // Record transaction in payments table
       db.prepare(`

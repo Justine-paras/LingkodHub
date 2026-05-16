@@ -5,17 +5,25 @@ import {
   MapPin, 
   ChevronLeft, 
   ChevronRight, 
-  MessageSquare 
+  MessageSquare,
+  Activity,
+  Users,
+  Banknote,
+  CheckCircle2
 } from 'lucide-react';
 import { api } from '../../../services/api';
+import { ProcessTimeline } from '../shared/ProcessTimeline';
 
 export const HomeDashboard = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [locationQuery, setLocationQuery] = React.useState('Dasmariñas City');
+  const [locationQuery, setLocationQuery] = React.useState('');
   
   const [activeJobs, setActiveJobs] = React.useState<any[]>([]);
   const [ongoingJobs, setOngoingJobs] = React.useState<any[]>([]);
+  const [completedJobs, setCompletedJobs] = React.useState<any[]>([]);
+  const [totalApplicants, setTotalApplicants] = React.useState(0);
+  const [topProviders, setTopProviders] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
   const [hasSearched, setHasSearched] = React.useState(false);
@@ -32,11 +40,70 @@ export const HomeDashboard = () => {
 
     Promise.all([
       api.getJobs({ status: 'pending' }),
-      api.getJobs({ status: 'in_progress' })
-    ]).then(([pending, ongoing]) => {
-      setActiveJobs(pending);
-      // Ensure ongoing jobs have a provider assigned (meaning someone was hired)
-      setOngoingJobs(ongoing.filter((j: any) => j.provider_id !== null));
+      api.getJobs({ status: 'in_progress' }),
+      api.getJobs({ status: 'completed' })
+    ]).then(async ([pending, ongoing, completed]) => {
+      // For Active Jobs, only show those that haven't been assigned yet
+      const unassignedPending = pending.filter((j: any) => j.provider_id === null);
+      setActiveJobs(unassignedPending);
+
+      // For Ongoing Jobs, show 'in_progress' and 'pending but accepted'
+      const assignedPendingCandidates = pending.filter((j: any) => j.provider_id !== null);
+      const assignedPendingResults = await Promise.all(assignedPendingCandidates.map(async (job: any) => {
+         try {
+            const apps = await api.getJobApplications(job.id);
+            const providerApplied = apps.some((a: any) => a.provider_id === job.provider_id);
+            return providerApplied ? job : null;
+         } catch(e) { return null; }
+      }));
+      const assignedPending = assignedPendingResults.filter(j => j !== null);
+      
+      const combinedOngoing = [...ongoing, ...assignedPending];
+      
+      // Enrich with submission status
+      const enrichedOngoing = await Promise.all(combinedOngoing.map(async (job: any) => {
+        try {
+          const allMessages = await api.getMessages(job.provider_id);
+          const messages = allMessages.filter((m: any) => m.job_id === job.id);
+          const hasSubmission = messages.some((m: any) => 
+            m.sender_id === job.provider_id && 
+            m.content && (m.content.includes('completed the work') || m.content.includes('release the funds'))
+          );
+          const clientConfirmed = messages.some((m: any) => m.content && m.content.includes('[SYSTEM:CLIENT_CONFIRMED_ARRIVAL]'));
+          const providerArrived = messages.some((m: any) => m.content && m.content.includes('[SYSTEM:PROVIDER_ARRIVED]'));
+          
+          if (clientConfirmed && providerArrived && job.status === 'pending') {
+             try {
+                await api.updateJobStatus(job.id, 'in_progress');
+                job.status = 'in_progress';
+             } catch(e) { console.error('Auto-resolve failed', e); }
+          }
+          
+          return { ...job, is_submitted: hasSubmission, client_confirmed: clientConfirmed, provider_arrived: providerArrived };
+        } catch (e) {
+          return job;
+        }
+      }));
+
+      setOngoingJobs(enrichedOngoing);
+      
+      setCompletedJobs(completed);
+
+      // Fetch applications count for unassigned pending jobs
+      let applicantCount = 0;
+      for (const job of unassignedPending) {
+        try {
+          const apps = await api.getJobApplications(job.id);
+          applicantCount += apps.length;
+        } catch (err) {
+          console.error(`Failed to fetch apps for job ${job.id}`, err);
+        }
+      }
+      setTotalApplicants(applicantCount);
+      
+      // Fetch top providers for recommendation
+      const providers = await api.getProviders({ location: locationQuery });
+      setTopProviders(providers.slice(0, 3)); // Show top 3 for now
     }).catch(console.error).finally(() => setIsLoading(false));
   }, []);
 
@@ -193,36 +260,138 @@ export const HomeDashboard = () => {
       ) : (
         <div className={`flex flex-col gap-12 w-full ${!isEmailVerified ? 'opacity-50 pointer-events-none select-none' : ''}`}>
            
-            {/* Financial Overview Section - Full Width */}
+            {/* Dashboard Overview - High-Level Summary Cards */}
             <div className="flex flex-col gap-6">
                <div className="flex justify-between items-end border-b border-brand-outline pb-4">
-                 <div>
-                    <h2 className="text-2xl font-semibold text-brand-text-main">Financial Overview</h2>
-                    <p className="text-sm text-brand-text-variant mt-1.5">Monitor your platform spending</p>
-                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                 <div className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
-                    <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-2">Total Lifetime Spent</p>
-                    <div className="flex items-center gap-3">
-                       <span className="text-3xl font-bold text-brand-text-main">₱{(ongoingJobs.reduce((acc, job) => acc + (job.budget || 0), 0) * 1.2).toLocaleString()}</span>
-                       <span className="text-[10px] font-bold text-[#059669] bg-[#059669]/10 px-2 py-0.5 rounded-full">+12%</span>
-                    </div>
-                    <p className="text-[10px] text-brand-text-variant mt-2 font-medium">Calculated from all completed transactions</p>
-                 </div>
-                 <div className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
-                    <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-2">Active Escrow</p>
-                    <div className="flex items-center gap-3">
-                       <span className="text-3xl font-bold text-brand-text-main">₱{ongoingJobs.reduce((acc, job) => acc + (job.budget || 0), 0).toLocaleString()}</span>
-                       <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-full">{ongoingJobs.length} Tasks</span>
-                    </div>
-                    <p className="text-[10px] text-brand-text-variant mt-2 font-medium">Funds currently held for ongoing tasks</p>
-                 </div>
-                 <div className="bg-brand-primary/5 border-2 border-brand-primary/20 p-6 rounded-3xl shadow-sm flex flex-col justify-center">
-                    <p className="text-xs font-bold text-brand-primary mb-1">Payment Protection Active</p>
-                    <p className="text-[10px] text-brand-text-variant leading-relaxed">Your funds are securely held in escrow until you approve the completed task.</p>
-                 </div>
-              </div>
+                  <div>
+                     <h2 className="text-2xl font-semibold text-brand-text-main">Dashboard Overview</h2>
+                     <p className="text-sm text-brand-text-variant mt-1.5">Your activity at a glance</p>
+                  </div>
+               </div>
+               
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {/* Active Tasks Card */}
+                  <div className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-3xl shadow-sm hover:shadow-md transition-all group">
+                     <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 bg-brand-primary/10 text-brand-primary rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                           <Activity size={20} />
+                        </div>
+                        <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-full uppercase">Live</span>
+                     </div>
+                     <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-1">Active Tasks</p>
+                     <div className="flex items-end gap-2">
+                        <span className="text-3xl font-bold text-brand-text-main">{ongoingJobs.length}</span>
+                        <span className="text-xs text-brand-text-variant mb-1 font-medium">In Progress</span>
+                     </div>
+                  </div>
+
+                  {/* New Applicants Card */}
+                  <div className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-3xl shadow-sm hover:shadow-md transition-all group">
+                     <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 bg-blue-500/10 text-blue-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                           <Users size={20} />
+                        </div>
+                        {totalApplicants > 0 && <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></div>}
+                     </div>
+                     <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-1">New Applicants</p>
+                     <div className="flex items-end gap-2">
+                        <span className="text-3xl font-bold text-brand-text-main">{totalApplicants}</span>
+                        <span className="text-xs text-brand-text-variant mb-1 font-medium">Waiting Review</span>
+                     </div>
+                  </div>
+
+                  {/* Total Spent Card */}
+                  <div className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-3xl shadow-sm hover:shadow-md transition-all group">
+                     <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 bg-[#059669]/10 text-[#059669] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                           <Banknote size={20} />
+                        </div>
+                        <span className="text-[10px] font-bold text-[#059669] bg-[#059669]/10 px-2 py-0.5 rounded-full uppercase">Total</span>
+                     </div>
+                     <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-1">Total Spent</p>
+                     <div className="flex items-end gap-1">
+                        <span className="text-xs text-brand-text-variant mb-1 font-bold">₱</span>
+                        <span className="text-3xl font-bold text-brand-text-main">
+                           {completedJobs.reduce((acc, job) => acc + (job.budget || 0), 0).toLocaleString()}
+                        </span>
+                     </div>
+                  </div>
+
+                  {/* Tasks Completed Card */}
+                  <div className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-3xl shadow-sm hover:shadow-md transition-all group">
+                     <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 bg-amber-500/10 text-amber-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                           <CheckCircle2 size={20} />
+                        </div>
+                        <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full uppercase">Done</span>
+                     </div>
+                     <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-1">Tasks Completed</p>
+                     <div className="flex items-end gap-2">
+                        <span className="text-3xl font-bold text-brand-text-main">{completedJobs.length}</span>
+                        <span className="text-xs text-brand-text-variant mb-1 font-medium">Successful Jobs</span>
+                     </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* Recommended Professionals Feed */}
+            <div className="flex flex-col gap-8">
+               <div className="flex justify-between items-end border-b border-brand-outline pb-4">
+                  <div>
+                     <h2 className="text-2xl font-semibold text-brand-text-main">Recommended Professionals</h2>
+                     <p className="text-sm text-brand-text-variant mt-1.5">Top-rated experts ready to help in {locationQuery || 'your area'}</p>
+                  </div>
+                  <button 
+                    className="text-sm font-semibold text-brand-primary hover:text-[#059669] transition-colors flex items-center gap-1"
+                    onClick={() => {
+                       setSearchQuery('');
+                       handleSearch('');
+                     }}
+                  >
+                    View All <ChevronRight size={16} />
+                  </button>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {topProviders.length > 0 ? topProviders.map((provider, i) => (
+                     <div key={provider.id} className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-[2rem] hover:border-brand-primary/50 hover:shadow-xl transition-all group flex flex-col relative overflow-hidden">
+                        {/* Distance Badge */}
+                        <div className="absolute top-6 right-6 bg-brand-primary/10 text-brand-primary px-3 py-1 rounded-full text-[10px] font-bold border border-brand-primary/10">
+                           {i === 0 ? '0.8km' : i === 1 ? '1.2km' : '2.5km'} away
+                        </div>
+
+                        <div className="flex items-center gap-4 mb-6">
+                           <img src={provider.avatar_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt={provider.full_name} className="w-16 h-16 rounded-2xl object-cover border-2 border-brand-outline group-hover:border-brand-primary/50 transition-colors" />
+                           <div>
+                              <h3 className="text-lg font-bold text-brand-text-main line-clamp-1">{provider.full_name}</h3>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                 <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-100">
+                                    <Activity size={12} className="text-amber-500 fill-amber-500" />
+                                    <span className="text-xs font-bold text-amber-700">4.9</span>
+                                 </div>
+                                 <span className="text-[10px] font-semibold text-brand-text-variant bg-brand-surface px-2 py-1 rounded-md border border-brand-outline">Verified</span>
+                              </div>
+                           </div>
+                        </div>
+
+                        <p className="text-sm text-brand-text-main font-medium mb-6 leading-relaxed">
+                           Need a {provider.services?.split(', ')[0] || 'Professional'}? {provider.full_name.split(' ')[0]} is available now to help.
+                        </p>
+
+                        <button 
+                           onClick={() => window.dispatchEvent(new CustomEvent('hire-provider', { detail: provider }))}
+                           className="w-full py-3.5 bg-brand-surface border-2 border-brand-outline text-brand-text-main font-bold rounded-2xl hover:bg-brand-primary hover:text-white hover:border-brand-primary transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-2 group/btn"
+                        >
+                           Direct Hire
+                           <ChevronRight size={18} className="group-hover/btn:translate-x-1 transition-transform" />
+                        </button>
+                     </div>
+                  )) : (
+                     <div className="col-span-3 py-12 text-center text-brand-text-variant border-2 border-dashed border-brand-outline rounded-3xl">
+                        Searching for nearby professionals...
+                     </div>
+                  )}
+               </div>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-12">
@@ -289,12 +458,22 @@ export const HomeDashboard = () => {
                 ) : ongoingJobs.map(job => (
                   <div key={job.id} className="bg-brand-surface-card border border-brand-primary/30 p-8 rounded-3xl relative overflow-hidden shadow-sm">
                      {/* Active indicator */}
-                     <div className="absolute top-8 right-8 flex items-center gap-2 bg-brand-primary/10 px-3 py-1 rounded-full border border-brand-primary/20">
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-primary"></span>
-                        </span>
-                        <span className="text-xs font-semibold text-brand-primary px-1">IN PROGRESS</span>
+                     <div className="absolute top-8 right-8 flex flex-col items-end gap-2">
+                        {job.is_submitted && (
+                          <div className="flex items-center gap-2 bg-amber-500 text-white px-3 py-1 rounded-full animate-pulse shadow-lg mb-1">
+                             <CheckCircle2 size={12} />
+                             <span className="text-[10px] font-bold uppercase tracking-widest">WORK SUBMITTED</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 bg-brand-primary/10 px-3 py-1 rounded-full border border-brand-primary/20">
+                           <span className="relative flex h-2 w-2">
+                             <span className={job.status === 'in_progress' ? "animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75" : ""}></span>
+                             <span className={`relative inline-flex rounded-full h-2 w-2 ${job.status === 'in_progress' ? 'bg-brand-primary' : 'bg-blue-500'}`}></span>
+                           </span>
+                           <span className={`text-xs font-semibold px-1 ${job.status === 'in_progress' ? 'text-brand-primary' : 'text-blue-600'}`}>
+                              {job.status === 'in_progress' ? 'IN PROGRESS' : 'ASSIGNED'}
+                           </span>
+                        </div>
                      </div>
 
                      <div className="mb-4 mt-1 pr-32">
@@ -304,6 +483,10 @@ export const HomeDashboard = () => {
                      <div className="flex items-center gap-1.5 text-brand-text-variant mb-6">
                          <MapPin size={14} />
                          <span className="text-sm truncate">{job.location}</span>
+                     </div>
+
+                     <div className="mb-6 bg-brand-surface/50 p-4 rounded-2xl border border-brand-outline/50">
+                        <ProcessTimeline currentState={job.status === 'in_progress' ? 'in_progress' : 'hired'} />
                      </div>
 
                      <div className="flex items-center gap-4 pt-6 pb-6 border-t border-brand-outline mb-6 -mx-8 px-8">
@@ -321,17 +504,62 @@ export const HomeDashboard = () => {
                            <MessageSquare size={18} />
                         </button>
                      </div>
-                     
-                     <button 
-                       className="w-full py-3.5 bg-brand-primary text-white text-sm font-semibold rounded-xl hover:bg-[#059669] transition-all shadow-lg active:scale-[0.98] hover:shadow-brand-primary/20 hover:shadow-xl"
-                       onClick={() => {
-                          api.updateJobStatus(job.id, 'completed').then(() => {
-                             setOngoingJobs(ongoingJobs.filter((j: any) => j.id !== job.id));
-                          }).catch(console.error);
-                       }}
-                     >
-                        Mark as Completed
-                     </button>
+                                       {job.status === 'pending' ? (
+                       <button 
+                         onClick={async () => {
+                            if (!job.client_confirmed) {
+                               try {
+                                 await api.sendMessage(job.provider_id, '[SYSTEM:CLIENT_CONFIRMED_ARRIVAL]', job.id);
+                                 if (job.provider_arrived) {
+                                    await api.updateJobStatus(Math.floor(job.id), 'in_progress');
+                                 }
+                                 const channel = new BroadcastChannel('dashboard_sync');
+                                 channel.postMessage({ type: 'DATA_UPDATED' });
+                                 channel.close();
+                                 alert(job.provider_arrived ? 'Worker confirmed! Task is now in progress.' : 'You confirmed arrival. Waiting for worker to also confirm.');
+                                 
+                                 // Update local state to trigger UI changes
+                                 setOngoingJobs(ongoingJobs.map((j: any) => 
+                                   j.id === job.id 
+                                     ? { ...j, client_confirmed: true, status: job.provider_arrived ? 'in_progress' : 'pending' } 
+                                     : j
+                                 ));
+                               } catch(e) { console.error(e); }
+                            }
+                         }}
+                         disabled={job.client_confirmed}
+                         className={`w-full py-3.5 text-sm font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 ${
+                           job.client_confirmed 
+                             ? 'bg-brand-surface text-brand-text-variant cursor-not-allowed border border-brand-outline'
+                             : 'bg-brand-primary text-white hover:bg-brand-primary/90'
+                         }`}
+                       >
+                         <MapPin size={18} />
+                         {job.client_confirmed ? 'Waiting for Arrival...' : 'Confirm Worker is Here'}
+                       </button>
+                     ) : (
+                       <button 
+                         className="w-full py-3.5 bg-[#059669] text-white text-sm font-bold rounded-xl hover:bg-[#047857] transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+                         onClick={async () => {
+                            try {
+                               await api.updateJobStatus(Math.floor(job.id), 'completed');
+                               
+                               const channel = new BroadcastChannel('dashboard_sync');
+                               channel.postMessage({ type: 'DATA_UPDATED' });
+                               channel.close();
+                               
+                               setOngoingJobs(ongoingJobs.filter((j: any) => j.id !== job.id));
+                               alert('Funds released successfully! The professional has been paid and the task is archived.');
+                            } catch (err) {
+                               console.error('Failed to complete task', err);
+                               alert('Payment Release Failed: The system encountered an error. Please ensure the professional has clicked "Accept" in their dashboard before you release funds.');
+                            }
+                         }}
+                       >
+                          <CheckCircle2 size={18} />
+                          Release Funds
+                       </button>
+                     )}
                   </div>
                 ))}
               </div>

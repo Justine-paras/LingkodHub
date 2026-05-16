@@ -8,19 +8,22 @@ import { HistorySection } from '../components/dashboard/shared/HistorySection';
 import { ProviderHomeDashboard, BrowseJobsSection } from '../components/dashboard/provider/ProviderHomeDashboard';
 import { ProviderBidsSection as MyOffersSection } from '../components/dashboard/provider/ProviderBidsSection';
 import { ProviderOngoingTasksSection as ProviderActiveWorkSection } from '../components/dashboard/provider/ProviderOngoingTasksSection';
+import { ProviderInvitationsSection } from '../components/dashboard/provider/ProviderInvitationsSection';
 import { EarningsSection } from '../components/dashboard/provider/EarningsSection';
 import { HelpSection } from '../components/dashboard/shared/HelpSection';
 
 
 export default function ProviderDashboard() {
-  const [activeTab, setActiveTab] = useState('home');
-  const [isDark, setIsDark] = useState(false);
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('providerActiveTab') || 'home');
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('dashboardTheme') === 'dark');
 
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('dashboardTheme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('dashboardTheme', 'light');
     }
     // Cleanup theme bleed
     return () => {
@@ -35,6 +38,10 @@ export default function ProviderDashboard() {
     window.addEventListener('change-tab', handleTabChange);
     return () => window.removeEventListener('change-tab', handleTabChange);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('providerActiveTab', activeTab);
+  }, [activeTab]);
 
   return (
     <div className={`min-h-screen bg-brand-surface font-sans flex text-left`}>
@@ -52,6 +59,8 @@ export default function ProviderDashboard() {
             <MyOffersSection />
           ) : activeTab === 'active-work' ? (
             <ProviderActiveWorkSection />
+          ) : activeTab === 'invitations' ? (
+            <ProviderInvitationsSection />
           ) : activeTab === 'earnings' ? (
             <EarningsSection />
           ) : activeTab === 'help' ? (

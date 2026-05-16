@@ -1,26 +1,73 @@
 import React from 'react';
 import { 
   TrendingUp, 
-  Smartphone 
+  Smartphone,
+  Star
 } from 'lucide-react';
 import { api } from '../../../services/api';
 
 export const EarningsSection = () => {
   const [jobs, setJobs] = React.useState<any[]>([]);
   const [paymentMethod, setPaymentMethod] = React.useState('none');
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  React.useEffect(() => {
-    Promise.all([
-      api.getJobsByView('history'),
-      api.getMe()
-    ]).then(([jobsData, userData]) => {
-      setJobs(jobsData);
+  const fetchData = React.useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const [jobsData, userData] = await Promise.all([
+        api.getJobsByView('history'),
+        api.getMe()
+      ]);
+
+      // Fetch reviews received by the provider
+      let reviews: any[] = [];
+      try {
+        reviews = await api.getUserReviews(userData.id);
+      } catch (e) {}
+
+      // Defensive check for jobsData
+      const historyList = Array.isArray(jobsData) ? jobsData : [];
+
+      const enriched = historyList.map((job: any) => {
+        const review = Array.isArray(reviews) ? reviews.find((r: any) => r.job_id === job.id) : null;
+        return { ...job, rating: review?.rating || job.rating || 0 };
+      });
+
+      setJobs(enriched);
       setPaymentMethod(userData.payment_method || 'none');
-    }).catch(console.error);
+    } catch (err) {
+      console.error('Failed to fetch earnings data', err);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const completedJobs = jobs.filter((job) => job.status === 'completed');
+  React.useEffect(() => {
+    fetchData();
+
+    // Listen for cross-tab or cross-component updates
+    const channel = new BroadcastChannel('dashboard_sync');
+    channel.onmessage = (event) => {
+      if (event.data.type === 'DATA_UPDATED') {
+        fetchData();
+      }
+    };
+
+    return () => {
+      channel.close();
+    };
+  }, [fetchData]);
+
+  const completedJobs = jobs.filter((job) => job.status?.toLowerCase() === 'completed');
   const totalEarned = completedJobs.reduce((sum, job) => sum + Number(job.budget || 0), 0);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto py-12 px-12 w-full">
@@ -119,10 +166,25 @@ export const EarningsSection = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-outline/50">
-              {completedJobs.map((tx) => (
+              {completedJobs.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-brand-text-variant italic font-medium">
+                    No completed jobs or transactions found yet.
+                  </td>
+                </tr>
+              ) : completedJobs.map((tx) => (
                 <tr key={tx.id} className="hover:bg-brand-surface transition-colors">
                   <td className="px-6 py-4 font-medium text-brand-text-variant whitespace-nowrap">{new Date(tx.created_at).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 font-bold text-brand-text-main">{tx.title}</td>
+                  <td className="px-6 py-4">
+                    <p className="font-bold text-brand-text-main">{tx.title}</p>
+                    {tx.rating > 0 && (
+                      <div className="flex items-center gap-0.5 mt-1 text-amber-400">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} size={8} className={i < tx.rating ? "fill-current" : "text-brand-outline"} />
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-6 py-4 font-extrabold text-[#059669]">+₱{Number(tx.budget || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td className="px-6 py-4">
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-green-50 text-green-600">

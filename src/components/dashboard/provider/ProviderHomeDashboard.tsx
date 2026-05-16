@@ -10,7 +10,8 @@ import {
   TrendingUp, 
   Star,
   Search,
-  Filter
+  Filter,
+  Zap
 } from 'lucide-react';
 import { api } from '../../../services/api';
 
@@ -20,6 +21,7 @@ export const ProviderHomeDashboard = () => {
   const [ongoingJobs, setOngoingJobs] = React.useState<any[]>([]);
   const [historyJobs, setHistoryJobs] = React.useState<any[]>([]);
   const [availableJobs, setAvailableJobs] = React.useState<any[]>([]);
+  const [pendingInvitations, setPendingInvitations] = React.useState<any[]>([]);
   const [stats, setStats] = React.useState({ avg_rating: 0, total_reviews: 0 });
   const [isLoading, setIsLoading] = React.useState(true);
   
@@ -34,17 +36,81 @@ export const ProviderHomeDashboard = () => {
         setIsEmailVerified(!!user.is_email_verified);
         setIsProfileLoading(false);
         
-        const [ongoing, history, available, reviews] = await Promise.all([
+        const [ongoing, assigned, history, available, reviews] = await Promise.all([
           api.getJobsByView('ongoing'),
+          api.getJobsByView('assigned'),
           api.getJobsByView('history'),
           api.getJobs(),
           api.getUserReviews(user.id)
         ]);
 
-        setOngoingJobs(ongoing);
-        setHistoryJobs(history);
-        setAvailableJobs(available);
-        setStats(reviews);
+        const ongoingList = Array.isArray(ongoing) ? ongoing : [];
+        const assignedList = Array.isArray(assigned) ? assigned : [];
+        const historyList = Array.isArray(history) ? history : [];
+        const availableList = Array.isArray(available) ? available : [];
+
+        // Fetch applications to identify which jobs we've applied to
+        const myApps = await api.getMyApplications();
+        const appliedJobIds = Array.isArray(myApps) ? myApps.map((a: any) => a.job_id) : [];
+
+        // invitations are assigned jobs that are still pending/invited AND we haven't applied to yet (Direct Invites)
+        const invitations = assignedList.filter((j: any) => 
+          (j.status === 'pending' || j.status === 'invited') && 
+          !appliedJobIds.includes(j.id)
+        );
+        
+        // Deduplicate invitations
+        const uniqueInvitations = Array.from(new Map(invitations.map((j: any) => [j.id, j])).values());
+        setPendingInvitations(uniqueInvitations);
+
+        // truly ongoing are jobs that are in_progress, OR assigned and pending but the provider HAS applied
+        const validAssigned = assignedList.filter((j: any) => {
+           if (j.status === 'in_progress') return true;
+           if (j.status === 'pending' && appliedJobIds.includes(j.id)) return true;
+           return false;
+        });
+        
+        const trulyOngoing = [...ongoingList, ...validAssigned];
+        
+        // Deduplicate active work and filter out completed/cancelled
+        const uniqueOngoing = Array.from(new Map(trulyOngoing.map((j: any) => [j.id, j])).values())
+          .filter((j: any) => j.status !== 'completed' && j.status !== 'cancelled');
+
+        // Enrich with submission status and arrival flags
+        const enrichedOngoing = await Promise.all(uniqueOngoing.map(async (job: any) => {
+          try {
+            const allMessages = await api.getMessages(job.client_id);
+            const messages = allMessages.filter((m: any) => m.job_id === job.id);
+            const hasSubmission = messages.some((m: any) => 
+              m.sender_id === user.id && 
+              m.content && (m.content.includes('completed the work') || m.content.includes('release the funds'))
+            );
+            const providerArrived = messages.some((m: any) => m.content && m.content.includes('[SYSTEM:PROVIDER_ARRIVED]'));
+            const clientConfirmed = messages.some((m: any) => m.content && m.content.includes('[SYSTEM:CLIENT_CONFIRMED_ARRIVAL]'));
+            
+            if (clientConfirmed && providerArrived && job.status === 'pending') {
+               try {
+                  await api.updateJobStatus(job.id, 'in_progress');
+                  job.status = 'in_progress';
+               } catch(e) { console.error('Auto-resolve failed', e); }
+            }
+            
+            return { ...job, is_submitted: hasSubmission, provider_arrived: providerArrived, client_confirmed: clientConfirmed };
+          } catch (e) {
+            return job;
+          }
+        }));
+
+        setOngoingJobs(enrichedOngoing);
+        setHistoryJobs(historyList);
+        
+        // Available jobs should include pending, open, or active jobs that don't have a provider yet
+        setAvailableJobs(availableList.filter((j: any) => 
+          (!j.provider_id || j.provider_id === null) && 
+          (j.status === 'pending' || j.status === 'open' || j.status === 'active')
+        )); 
+        
+        setStats(reviewsData);
       } catch (error) {
         console.error('Failed to fetch dashboard data', error);
       } finally {
@@ -53,6 +119,22 @@ export const ProviderHomeDashboard = () => {
     };
 
     fetchData();
+
+    // Listen for cross-tab or cross-component updates
+    const channel = new BroadcastChannel('dashboard_sync');
+    channel.onmessage = (event) => {
+      if (event.data.type === 'DATA_UPDATED') {
+        fetchData();
+      }
+    };
+
+    // Polling fallback
+    const interval = setInterval(fetchData, 15000);
+
+    return () => {
+      channel.close();
+      clearInterval(interval);
+    };
   }, []);
 
   const firstName = displayName ? displayName.split(' ')[0] : 'Provider';
@@ -138,6 +220,70 @@ export const ProviderHomeDashboard = () => {
         {/* Left Column: Priorities & Calendar (8 cols) */}
         <div className="lg:col-span-8 flex flex-col gap-8">
           
+          {/* Direct Invitations / Offers */}
+          {pendingInvitations.length > 0 && (
+            <section className="animate-in slide-in-from-top-4 duration-500">
+               <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-black text-brand-text-main flex items-center gap-2 uppercase tracking-tight">
+                     <Star size={20} className="text-amber-500 fill-amber-500" /> New Job Invitations
+                  </h2>
+                  <span className="px-3 py-1 bg-amber-500 text-white text-[10px] font-black rounded-full animate-pulse">
+                     {pendingInvitations.length} Pending
+                  </span>
+               </div>
+               <div className="space-y-4">
+                  {pendingInvitations.map(inv => (
+                     <div key={inv.id} className="bg-white border-2 border-amber-200 rounded-3xl p-6 shadow-xl shadow-amber-500/5 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div className="flex items-center gap-4">
+                           <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 shrink-0 border border-amber-100">
+                              <Zap size={28} />
+                           </div>
+                           <div>
+                              <h4 className="text-lg font-black text-brand-text-main leading-tight mb-1">{inv.title}</h4>
+                              <p className="text-xs font-bold text-brand-text-variant uppercase">{inv.client_name} • {inv.location}</p>
+                           </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                           <div className="text-right mr-4 hidden md:block">
+                              <p className="text-[10px] font-black text-brand-text-variant uppercase tracking-widest">Offer Price</p>
+                              <p className="text-xl font-black text-brand-text-main">₱{Number(inv.budget || 0).toLocaleString()}</p>
+                           </div>
+                           <button 
+                              onClick={async () => {
+                                 if (!confirm('Decline this job invitation?')) return;
+                                 try {
+                                    await api.updateJobStatus(inv.id, 'cancelled');
+                                    setPendingInvitations(prev => prev.filter(p => p.id !== inv.id));
+                                 } catch (err) { console.error(err); }
+                              }}
+                              className="px-6 py-3 bg-brand-surface border border-brand-outline text-brand-text-main text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all"
+                           >
+                              Decline
+                           </button>
+                           <button 
+                              onClick={async () => {
+                                 try {
+                                    await api.applyToJob(inv.id, 'I accept your direct work invitation! Let\'s get started.');
+                                    // Refresh all to move it to ongoing
+                                    window.dispatchEvent(new CustomEvent('dashboard_sync', { detail: { type: 'DATA_UPDATED' } }));
+                                    const channel = new BroadcastChannel('dashboard_sync');
+                                    channel.postMessage({ type: 'DATA_UPDATED' });
+                                    channel.close();
+                                    // Local update for immediate feedback
+                                    setPendingInvitations(prev => prev.filter(p => p.id !== inv.id));
+                                 } catch (err) { console.error(err); }
+                              }}
+                              className="px-8 py-3 bg-brand-primary text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-[#059669] shadow-lg shadow-brand-primary/20 transition-all active:scale-95"
+                           >
+                              Accept Job
+                           </button>
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            </section>
+          )}
+
           {/* Priority One: The Next Job */}
           <section>
             <div className="flex items-center justify-between mb-4">
@@ -145,8 +291,10 @@ export const ProviderHomeDashboard = () => {
                 <Clock size={20} className="text-brand-primary" /> Next Up
               </h2>
               {nextUpJob && (
-                <span className="text-xs font-semibold text-brand-primary bg-brand-primary/10 px-2.5 py-1 rounded-full">
-                  Ongoing Task
+                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest ${
+                  nextUpJob.status === 'in_progress' ? 'text-brand-primary bg-brand-primary/10' : 'text-blue-600 bg-blue-50'
+                }`}>
+                  {nextUpJob.status === 'in_progress' ? 'Ongoing Task' : 'Assigned Invitation'}
                 </span>
               )}
             </div>
@@ -194,6 +342,34 @@ export const ProviderHomeDashboard = () => {
                     >
                       <Phone size={18} className="text-brand-primary" /> Call Client
                     </button>
+                    {nextUpJob.status === 'pending' && (
+                      <button 
+                        onClick={async () => {
+                           if (!nextUpJob.provider_arrived) {
+                              try {
+                                await api.sendMessage(nextUpJob.client_id, '[SYSTEM:PROVIDER_ARRIVED]', nextUpJob.id);
+                                if (nextUpJob.client_confirmed) {
+                                   await api.updateJobStatus(Math.floor(nextUpJob.id), 'in_progress');
+                                }
+                                const channel = new BroadcastChannel('dashboard_sync');
+                                channel.postMessage({ type: 'DATA_UPDATED' });
+                                channel.close();
+                                alert(nextUpJob.client_confirmed ? 'Arrival confirmed! Task is now in progress.' : 'You marked your arrival. Waiting for client to confirm.');
+                                window.location.reload(); 
+                              } catch(e) { console.error(e); }
+                           }
+                        }}
+                        disabled={nextUpJob.provider_arrived}
+                        className={`px-8 py-3 rounded-2xl font-bold text-xs transition-all flex items-center gap-2 shadow-lg ${
+                          nextUpJob.provider_arrived
+                            ? 'bg-brand-surface text-brand-text-variant cursor-not-allowed border border-brand-outline'
+                            : 'bg-brand-primary text-white hover:bg-brand-primary/90 shadow-brand-primary/20'
+                        }`}
+                      >
+                        <MapPin size={18} />
+                        {nextUpJob.provider_arrived ? 'Arrival Pending...' : 'I\'m Here'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -229,12 +405,30 @@ export const ProviderHomeDashboard = () => {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
+                        const btn = e.currentTarget;
+                        btn.disabled = true;
+                        btn.innerText = 'Sending...';
                         api.applyToJob(job.id).then(() => {
                           setAvailableJobs(prev => prev.filter(j => j.id !== job.id));
-                          alert('Application sent!');
-                        }).catch(console.error);
+                          
+                          // Notify other tabs/components that data has changed
+                          const channel = new BroadcastChannel('dashboard_sync');
+                          channel.postMessage({ type: 'DATA_UPDATED' });
+                          channel.close();
+                          
+                          alert('Success! Your offer for "' + job.title + '" has been sent.');
+                        }).catch(err => {
+                          btn.disabled = false;
+                          btn.innerText = 'Quick Pitch';
+                          if (err.message.includes('already applied')) {
+                            alert('You have already applied to this job.');
+                            setAvailableJobs(prev => prev.filter(j => j.id !== job.id));
+                          } else {
+                            alert('Failed to send offer: ' + err.message);
+                          }
+                        });
                       }}
-                      className="px-4 py-2 bg-brand-primary text-white text-[10px] font-extrabold rounded-xl hover:bg-[#059669] transition-all uppercase tracking-widest"
+                      className="px-4 py-2 bg-brand-primary text-white text-[10px] font-extrabold rounded-xl hover:bg-[#059669] transition-all uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Quick Pitch
                     </button>
@@ -322,19 +516,39 @@ export const BrowseJobsSection = () => {
       api.getServices()
     ])
       .then(([jobsData, servicesData]) => {
-        setJobs(jobsData);
+        const jobsList = Array.isArray(jobsData) ? jobsData : [];
+        setJobs(jobsList.filter((j: any) => 
+          (!j.provider_id || j.provider_id === null) && 
+          (j.status === 'pending' || j.status === 'open' || j.status === 'active')
+        ));
         setCategories(['All', ...servicesData.map((s: any) => s.name)]);
       })
       .catch(console.error)
       .finally(() => setIsLoading(false));
   }, []);
 
-  const sendOffer = async (jobId: number) => {
+  const sendOffer = async (jobId: number, e: React.MouseEvent<HTMLButtonElement>) => {
+    const btn = e.currentTarget;
     try {
+      btn.disabled = true;
+      btn.innerText = 'Sending...';
       await api.applyToJob(jobId);
       setJobs((prev) => prev.filter((job) => job.id !== jobId));
-    } catch (error) {
-      console.error('Failed to send offer', error);
+      
+      const channel = new BroadcastChannel('dashboard_sync');
+      channel.postMessage({ type: 'DATA_UPDATED' });
+      channel.close();
+      
+      alert('Success! Your offer has been sent.');
+    } catch (error: any) {
+      btn.disabled = false;
+      btn.innerText = 'Send Offer';
+      if (error.message.includes('already applied')) {
+        alert('You have already applied to this job.');
+        setJobs((prev) => prev.filter((job) => job.id !== jobId));
+      } else {
+        alert('Failed to send offer: ' + error.message);
+      }
     }
   };
 
@@ -417,7 +631,7 @@ export const BrowseJobsSection = () => {
                 <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-0.5">Budget</p>
                 <p className="text-2xl font-extrabold text-brand-text-main tracking-tight">₱{Number(job.budget || 0).toLocaleString()}</p>
               </div>
-              <button onClick={() => sendOffer(job.id)} className="px-8 py-3 bg-brand-primary text-white text-sm font-bold rounded-2xl hover:bg-[#059669] transition-all shadow-lg hover:shadow-brand-primary/20 active:scale-95">
+              <button onClick={(e) => sendOffer(job.id, e)} className="px-8 py-3 bg-brand-primary text-white text-sm font-bold rounded-2xl hover:bg-[#059669] transition-all shadow-lg hover:shadow-brand-primary/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                 Send Offer
               </button>
             </div>

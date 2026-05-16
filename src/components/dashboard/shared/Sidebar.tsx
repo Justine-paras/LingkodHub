@@ -9,7 +9,8 @@ import {
   HelpCircle,
   History,
   Banknote,
-  Settings
+  Settings,
+  Zap
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../../../services/api';
@@ -18,12 +19,14 @@ const SidebarItem = ({
   icon: Icon, 
   label, 
   active = false, 
-  onClick 
+  onClick,
+  badge = 0
 }: { 
   icon: any, 
   label: string, 
   active?: boolean,
-  onClick?: () => void 
+  onClick?: () => void,
+  badge?: number
 }) => {
   return (
     <button
@@ -36,7 +39,14 @@ const SidebarItem = ({
       }`}
     >
       <div className="flex items-center gap-4">
-        <Icon size={18} className={active ? 'text-brand-primary' : 'text-current'} />
+        <div className="relative">
+          <Icon size={18} className={active ? 'text-brand-primary' : 'text-current'} />
+          {badge > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center ring-2 ring-brand-surface group-hover:ring-brand-surface-card transition-all animate-bounce">
+              {badge}
+            </span>
+          )}
+        </div>
         <span className="text-sm font-medium">{label}</span>
       </div>
       {active && (
@@ -52,12 +62,26 @@ const SidebarItem = ({
 export const Sidebar = ({ activeTab, onTabChange, role = 'client' }: { activeTab: string, onTabChange: (tab: string) => void, role?: 'client' | 'provider' }) => {
   const navigate = useNavigate();
   const [isEmailVerified, setIsEmailVerified] = React.useState(true);
+  const [invitationCount, setInvitationCount] = React.useState(0);
 
   React.useEffect(() => {
     api.getMe().then(user => {
       setIsEmailVerified(!!user.is_email_verified);
+      
+      if (role === 'provider') {
+        // Fetch invitations count
+        Promise.all([
+          api.getJobsByView('assigned').catch(() => []),
+          api.getJobs({ status: 'pending' }).catch(() => [])
+        ]).then(([assigned, pending]) => {
+          const combined = [...assigned, ...pending];
+          const unique = Array.from(new Map(combined.map(j => [j.id, j])).values());
+          const count = unique.filter((j: any) => j.provider_id === user.id && j.status === 'pending').length;
+          setInvitationCount(count);
+        }).catch(console.error);
+      }
     }).catch(console.error);
-  }, []);
+  }, [role]);
 
   const handleTabClick = (tab: string) => {
     if (!isEmailVerified && ['jobs', 'tasks', 'offers', 'active-work', 'earnings'].includes(tab)) {
@@ -120,6 +144,13 @@ export const Sidebar = ({ activeTab, onTabChange, role = 'client' }: { activeTab
               label="My Offers" 
               active={activeTab === 'offers'} 
               onClick={() => handleTabClick('offers')} 
+            />
+            <SidebarItem 
+              icon={Zap} 
+              label="Work Invitations" 
+              active={activeTab === 'invitations'} 
+              onClick={() => handleTabClick('invitations')} 
+              badge={invitationCount}
             />
             <SidebarItem 
               icon={CheckSquare} 

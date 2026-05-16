@@ -12,15 +12,18 @@ import { OngoingTasksSection } from '../components/dashboard/client/OngoingTasks
 
 
 export default function ClientDashboard() {
-  const [activeTab, setActiveTab] = useState('home');
-  const [isDark, setIsDark] = useState(false); // default light theme as requested
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('clientActiveTab') || 'home');
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('dashboardTheme') === 'dark');
+  const [pendingProvider, setPendingProvider] = useState<any>(null);
 
   // Apply dark class to body if isDark
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('dashboardTheme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('dashboardTheme', 'light');
     }
     // Cleanup to ensure theme doesn't bleed to public pages
     return () => {
@@ -32,7 +35,8 @@ export default function ClientDashboard() {
     const handleTabChange = (e: any) => {
       if (e.detail) setActiveTab(e.detail);
     };
-    const handleHireProvider = () => {
+    const handleHireProvider = (e: any) => {
+      setPendingProvider(e.detail);
       setActiveTab('jobs');
     };
     window.addEventListener('change-tab', handleTabChange);
@@ -42,6 +46,10 @@ export default function ClientDashboard() {
       window.removeEventListener('hire-provider', handleHireProvider);
     };
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('clientActiveTab', activeTab);
+  }, [activeTab]);
 
   return (
     <div className={`min-h-screen bg-brand-surface font-sans selection:bg-brand-primary selection:text-white flex`}>
@@ -56,8 +64,10 @@ export default function ClientDashboard() {
           ) : activeTab === 'profile' ? (
             <ClientProfileSettings />
           ) : activeTab === 'jobs' ? (
-
-            <ActivePostsSection />
+            <ActivePostsSection 
+              initialInvitedProvider={pendingProvider} 
+              onClearPending={() => setPendingProvider(null)} 
+            />
           ) : activeTab === 'history' ? (
             <HistorySection />
           ) : activeTab === 'tasks' ? (

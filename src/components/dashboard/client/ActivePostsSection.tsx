@@ -17,11 +17,23 @@ import {
   Clock,
   Info,
   CreditCard,
-  Wallet
+  Wallet,
+  Sparkles,
+  Zap,
+  ShieldCheck,
+  ChevronDown,
+  Users
 } from 'lucide-react';
 import { api } from '../../../services/api';
+import { ProcessTimeline } from '../shared/ProcessTimeline';
 
-export const ActivePostsSection = () => {
+export const ActivePostsSection = ({ 
+  initialInvitedProvider = null, 
+  onClearPending = () => {} 
+}: { 
+  initialInvitedProvider?: any, 
+  onClearPending?: () => void 
+}) => {
   const [viewApplicantsJob, setViewApplicantsJob] = React.useState<any>(null);
   const [showConfetti, setShowConfetti] = React.useState(false);
   const [showPostModal, setShowPostModal] = React.useState(false);
@@ -41,15 +53,30 @@ export const ActivePostsSection = () => {
   const [formNegotiable, setFormNegotiable] = React.useState(false);
   const [formPayment, setFormPayment] = React.useState('gcash');
   const [formError, setFormError] = React.useState('');
-  const [hiringInfo, setHiringInfo] = React.useState<{jobId: number, applicationId: number, amount: number} | null>(null);
-  const [selectedPayment, setSelectedPayment] = React.useState('gcash');
+  
+  // Dynamic Options State
   const [addresses, setAddresses] = React.useState<any[]>([]);
   const [userData, setUserData] = React.useState<any>(null);
+  const [selectedAddressId, setSelectedAddressId] = React.useState<string>('');
+  const [tempGcashNumber, setTempGcashNumber] = React.useState('');
+  const [tempMayaNumber, setTempMayaNumber] = React.useState('');
   const [invitedProvider, setInvitedProvider] = React.useState<any>(null);
-  const [selectedAddressId, setSelectedAddressId] = React.useState<string>('custom');
-  const [isProcessingPayment, setIsProcessingPayment] = React.useState(false);
+  const [saveDetails, setSaveDetails] = React.useState(false);
 
-  const fetchJobs = async () => {
+  // Sync with prop from Dashboard
+  React.useEffect(() => {
+    if (initialInvitedProvider) {
+      setInvitedProvider(initialInvitedProvider);
+      setShowPostModal(true);
+      if (initialInvitedProvider.services) {
+        setFormCategory(initialInvitedProvider.services.split(', ')[0] || '');
+        setFormTitle(`${initialInvitedProvider.services.split(', ')[0] || 'Task'} Invitation`);
+      }
+      onClearPending();
+    }
+  }, [initialInvitedProvider]);
+
+  const fetchJobs = React.useCallback(async () => {
     try {
       setIsLoading(true);
       const [jobs, userAddresses, currentUser] = await Promise.all([
@@ -60,36 +87,61 @@ export const ActivePostsSection = () => {
       setAddresses(userAddresses);
       setUserData(currentUser);
       
-      // Set default payment method if available
       if (currentUser.payment_method) {
         setFormPayment(currentUser.payment_method);
-        setSelectedPayment(currentUser.payment_method);
       }
+      
+      setTempGcashNumber(currentUser.gcash_number || '');
+      setTempMayaNumber(currentUser.maya_number || '');
 
-      // Set default address if available
       const defaultAddr = userAddresses.find((a: any) => a.is_default);
       if (defaultAddr) {
         setFormLocation(defaultAddr.address_text);
         setSelectedAddressId(defaultAddr.id.toString());
+      } else if (userAddresses.length > 0) {
+        setFormLocation(userAddresses[0].address_text);
+        setSelectedAddressId(userAddresses[0].id.toString());
+      } else {
+        setSelectedAddressId('new');
       }
 
-      // Fetch applications for each job
       const jobsWithApps = await Promise.all(
         jobs.map(async (job: any) => {
           const apps = await api.getJobApplications(job.id);
           return { ...job, applicants: apps };
         })
       );
-      setActivePosts(jobsWithApps);
+      
+      // Filter logic:
+      // 1. Regular jobs (provider_id is null) stay in active posts.
+      // 2. Direct Invites (provider_id !== null) stay in active posts ONLY IF the provider hasn't applied (accepted) yet.
+      const activePostsFiltered = jobsWithApps.filter((job) => {
+        if (job.provider_id === null) return true;
+        const providerApplied = job.applicants.some((a: any) => a.provider_id === job.provider_id);
+        return !providerApplied; // If they haven't applied, it's still pending their acceptance
+      });
+
+      setActivePosts(activePostsFiltered);
     } catch (error) {
       console.error('Failed to fetch data', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   React.useEffect(() => {
     fetchJobs();
+
+    // Listen for cross-tab or cross-component updates
+    const channel = new BroadcastChannel('dashboard_sync');
+    channel.onmessage = (event) => {
+      if (event.data.type === 'DATA_UPDATED') {
+        fetchJobs();
+      }
+    };
+
+    // Polling fallback every 15s
+    const interval = setInterval(fetchJobs, 15000);
 
     const handleHireEvent = (e: any) => {
       setInvitedProvider(e.detail);
@@ -98,32 +150,27 @@ export const ActivePostsSection = () => {
         setFormCategory(e.detail.services.split(', ')[0] || '');
       }
     };
+
+    const handleDuplicateEvent = (e: any) => {
+      const job = e.detail;
+      setFormTitle(job.title || '');
+      setFormDesc(job.description || '');
+      setFormBudget(String(job.amount || job.budget || ''));
+      setFormPayment(job.paymentMethod || job.payment_method || 'gcash');
+      setFormCategory(job.category || '');
+      setFormLocation(job.location || '');
+      setShowPostModal(true);
+    };
+
     window.addEventListener('hire-provider', handleHireEvent);
-    return () => window.removeEventListener('hire-provider', handleHireEvent);
-  }, []);
-
-  const handleHire = async (jobId: number, applicationId: number, paymentMethod: string) => {
-    try {
-      setIsProcessingPayment(true);
-      await api.decideApplication(applicationId, 'accepted', paymentMethod);
-      setShowConfetti(true);
-      setHiringInfo(null);
-      setTimeout(() => {
-        setShowConfetti(false);
-        setViewApplicantsJob(null);
-        setActivePosts(prev => prev.filter(job => job.id !== jobId));
-      }, 2000);
-    } catch (error) {
-      console.error('Failed to hire', error);
-    } finally {
-      setIsProcessingPayment(false);
-    }
-  };
-
-  const calculateAvgRating = (applicants: any[]) => {
-    if (applicants.length === 0) return 0;
-    return 5.0; // Placeholder for now
-  };
+    window.addEventListener('duplicate-job', handleDuplicateEvent);
+    return () => {
+      window.removeEventListener('hire-provider', handleHireEvent);
+      window.removeEventListener('duplicate-job', handleDuplicateEvent);
+      channel.close();
+      clearInterval(interval);
+    };
+  }, [fetchJobs]);
 
   const handlePostJob = async () => {
     if (!formTitle.trim()) {
@@ -135,25 +182,60 @@ export const ActivePostsSection = () => {
       setFormError('Price must be at least ₱100');
       return;
     }
+
+    if (!formLocation.trim()) {
+       setFormError('Location is required');
+       return;
+    }
+
+    const currentPaymentNum = formPayment === 'gcash' ? tempGcashNumber : tempMayaNumber;
+    if (!currentPaymentNum) {
+       setFormError(`Please provide your ${formPayment === 'gcash' ? 'GCash' : 'Maya'} number`);
+       return;
+    }
     
     try {
       setFormError('');
+      
+      // If "Save for future use" is checked, we would update profile here
+      if (saveDetails) {
+         await api.updateMe({
+            gcash_number: tempGcashNumber,
+            maya_number: tempMayaNumber,
+            payment_method: formPayment
+         });
+         // If a new address was used, we could also save it
+         if (selectedAddressId === 'new' && formLocation) {
+            await api.addAddress({
+               label: 'Added from Post',
+               address_text: formLocation,
+               is_default: addresses.length === 0 ? 1 : 0
+            });
+         }
+      }
+
       await api.createJob({
         title: formTitle,
         description: formDesc,
-        location: formLocation || 'Anywhere',
+        category: formCategory,
+        location: formLocation,
         budget: budgetNum,
+        is_urgent: formIsASAP,
         is_negotiable: formNegotiable,
         payment_method: formPayment,
-        provider_id: invitedProvider?.id
+        provider_id: invitedProvider?.id,
+        scheduled_at: formIsASAP ? null : formDate
       });
       
-      // If payment method chosen is different from default, suggest update? 
-      // For now we just create the job.
-
       fetchJobs();
       setShowPostModal(false);
       setInvitedProvider(null);
+      setSaveDetails(false);
+      
+      // Broadcast update so providers see the new job immediately
+      const channel = new BroadcastChannel('dashboard_sync');
+      channel.postMessage({ type: 'DATA_UPDATED' });
+      channel.close();
       
       // Reset Form
       setFormTitle('');
@@ -164,9 +246,7 @@ export const ActivePostsSection = () => {
       setFormIsASAP(false);
       setFormBudget('');
       setFormNegotiable(false);
-      // Keep formPayment as is for next post convenience
       
-      // Show Toast
       setShowSuccessToast(true);
       setTimeout(() => {
         setShowSuccessToast(false);
@@ -187,704 +267,509 @@ export const ActivePostsSection = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-12 px-6 md:px-12 relative w-full flex flex-col min-h-screen">
+    <div className="max-w-6xl mx-auto py-12 px-6 lg:px-12 relative w-full flex flex-col min-h-screen font-sans">
       
       {/* Toast Notification */}
       {showSuccessToast && (
-        <div className="fixed top-8 right-8 z-[100] bg-[#059669] text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-           <CheckCircle size={20} className="text-white bg-[#047857] rounded-full p-0.5" />
-           <span className="font-semibold text-sm">Task posted successfully!</span>
+        <div className="fixed top-8 right-8 z-[100] bg-[#059669] text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/20 backdrop-blur-md">
+           <CheckCircle size={20} className="text-white" />
+           <span className="font-bold text-sm">Task successfully listed!</span>
         </div>
       )}
 
-      {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-[100] flex animate-in fade-in duration-300">
-           {/* Mock Confetti Animation Overlay */}
-           <div className="absolute inset-0 bg-brand-primary/10 backdrop-blur-sm transition-all duration-1000"></div>
-           <div className="absolute inset-0 flex items-center justify-center flex-col">
-              <div className="w-24 h-24 bg-brand-surface-card rounded-full flex items-center justify-center shadow-2xl mb-6 transform scale-150 animate-bounce">
-                 <CheckCircle size={48} className="text-[#059669]" />
-              </div>
-              <h2 className="text-4xl font-bold text-brand-text-main shadow-brand-surface-container drop-shadow-md">Worker Hired!</h2>
-           </div>
-        </div>
-      )}
-
-      <div className="flex justify-between items-end mb-8 border-b border-brand-outline pb-4 shrink-0">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 shrink-0">
         <div>
-           <h1 className="text-3xl font-semibold text-brand-text-main mb-2">My Active Posts</h1>
-           <p className="text-sm text-brand-text-variant">Manage your open requests and review applicants</p>
+           <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-brand-primary rounded-xl flex items-center justify-center shadow-lg shadow-brand-primary/20">
+                 <Zap size={20} className="text-white" />
+              </div>
+              <h1 className="text-3xl font-black text-brand-text-main tracking-tight uppercase">Active Tasks Section</h1>
+           </div>
+           <p className="text-brand-text-variant font-medium">Manage your public listings and review professional bids.</p>
         </div>
+        
         <button 
-          onClick={() => setShowPostModal(true)}
-          className="flex items-center gap-2 px-6 py-3 bg-brand-primary border border-brand-primary text-white text-sm font-semibold rounded-full hover:bg-[#059669] transition-all shadow-sm shadow-brand-primary/20"
+          onClick={() => {
+            setInvitedProvider(null);
+            setShowPostModal(true);
+          }}
+          className="group relative flex items-center gap-3 px-8 py-4 bg-brand-primary text-white text-sm font-black rounded-2xl hover:bg-[#059669] transition-all shadow-xl shadow-brand-primary/30 active:scale-95 overflow-hidden"
         >
-          <Plus size={18} className="text-white" />
+          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+          <Plus size={20} />
           Post a New Task
         </button>
-     </div>
-     
-     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-1 content-start">
+      </div>
+      
+      {/* Main Grid */}
+      <div className="flex-1">
         {isLoading ? (
-          <div className="col-span-1 md:col-span-2 py-16 text-center text-brand-text-variant">Loading your posts...</div>
-        ) : activePosts.map(job => (
-          <div 
-            key={job.id} 
-            className={`bg-brand-surface-card border-2 ${job.is_urgent ? 'border-orange-500/50 shadow-orange-500/10' : 'border-brand-outline hover:border-brand-primary/50'} p-6 rounded-3xl transition-all group relative flex flex-col min-h-[320px] ${job.is_paused ? 'opacity-70 grayscale-[0.2]' : ''}`}
-          >
-             {/* Status Header */}
-             <div className="flex justify-between items-start mb-4">
-                <div className="flex flex-col items-start gap-2">
-                   <div className="flex items-center gap-2">
-                      <span className="inline-block px-3 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold rounded-full uppercase tracking-wider">{job.category || 'General'}</span>
-                      {job.is_urgent && (
-                         <span className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-600 text-[10px] font-bold rounded-full uppercase tracking-wider animate-pulse flex-shrink-0">
-                            <AlertTriangle size={12} /> ASAP
-                         </span>
-                      )}
+          <div className="py-32 flex flex-col items-center justify-center text-center">
+             <div className="w-16 h-16 border-4 border-brand-primary/20 border-t-brand-primary rounded-full animate-spin mb-6"></div>
+             <p className="text-brand-text-variant font-bold animate-pulse uppercase tracking-widest text-sm">Syncing with marketplace...</p>
+          </div>
+        ) : activePosts.length === 0 ? (
+          <div className="py-12 flex flex-col items-center justify-center">
+             <div className="w-full max-w-4xl bg-brand-surface-card border-2 border-brand-outline rounded-[3rem] p-12 md:p-20 relative overflow-hidden shadow-2xl">
+                <div className="relative z-10 flex flex-col items-center text-center">
+                   <div className="w-24 h-24 bg-brand-primary text-white rounded-3xl flex items-center justify-center mb-8 shadow-2xl shadow-brand-primary/20 transform -rotate-6 hover:rotate-0 transition-transform duration-500">
+                      <Zap size={48} />
                    </div>
-                   <span className="text-[11px] font-semibold text-brand-text-variant bg-brand-surface px-2 py-0.5 rounded-md flex items-center gap-1 border border-brand-outline">
-                      {job.applicants.length === 0 ? (
-                         <span className="w-1.5 h-1.5 rounded-full bg-brand-text-variant/40"></span>
-                      ) : (
-                         <span className="w-1.5 h-1.5 rounded-full bg-[#059669] animate-pulse"></span>
-                      )}
-                      {job.applicants.length === 0 ? 'No Bids Yet' : 'New Applicants'}
-                   </span>
-                </div>
-
-                {/* Pause Toggle */}
-                <div className="flex items-center gap-1.5">
-                   <span className="text-xs font-semibold text-brand-text-variant">{job.is_paused ? 'Paused' : 'Public'}</span>
-                   <button 
-                     onClick={() => {
-                        // Toggle pause - placeholder for now
-                        setActivePosts(prev => prev.map(p => p.id === job.id ? {...p, is_paused: !p.is_paused} : p))
-                     }}
-                     className={`w-10 h-5 rounded-full flex items-center transition-colors px-0.5 ${job.is_paused ? 'bg-brand-outline justify-start' : 'bg-[#059669] justify-end'}`}
-                   >
-                     <div className="w-4 h-4 bg-brand-surface-card rounded-full shadow-sm"></div>
-                   </button>
-                </div>
-             </div>
-
-             <div className="mb-4">
-                <h3 className={`text-xl font-bold leading-snug line-clamp-2 mb-2 ${job.is_urgent ? 'text-orange-600' : 'text-brand-text-main'}`}>
-                   {job.title}
-                </h3>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-text-variant bg-brand-surface border border-brand-outline py-1 px-2.5 rounded-lg inline-flex">
-                   <Calendar size={14} className={job.is_urgent ? 'text-orange-500' : 'text-brand-text-variant'} />
-                   <span className={job.is_urgent ? 'text-orange-600 font-bold' : ''}>{job.is_urgent ? 'ASAP' : new Date(job.created_at).toLocaleDateString()}</span>
-                </div>
-             </div>
-
-             <p className="text-sm text-brand-text-variant line-clamp-2 mb-6">
-                {job.description}
-             </p>
-
-             <div className="flex items-center justify-between mt-auto mb-6">
-                <div className="flex items-center gap-1.5 text-brand-text-variant">
-                   <MapPin size={14} />
-                   <span className="text-sm font-medium">{job.location}</span>
-                </div>
-                <div className="text-right flex flex-col items-end">
-                   <div className="text-xl font-bold text-brand-text-main">₱{job.budget?.toLocaleString()}</div>
-                   {job.is_negotiable && (
-                      <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase tracking-wider">Negotiable</span>
-                   )}
-                </div>
-             </div>
-             
-             {/* Applicant Status & Action */}
-             <div className="pt-5 border-t border-brand-outline">
-                <div className="flex flex-col gap-4">
-                   <div className="flex items-center justify-between">
-                     <div className="flex flex-col">
-                        <span className="text-sm font-bold text-brand-text-main">
-                           {job.applicants.length} Applicant{job.applicants.length !== 1 && 's'}
-                        </span>
-                        {job.applicants.length > 0 && (
-                           <span className="text-xs font-medium text-brand-text-variant flex items-center">
-                              Avg. <Star size={10} className="fill-brand-text-variant ml-1 mr-0.5" /> {calculateAvgRating(job.applicants)} rating
-                           </span>
-                        )}
-                     </div>
-                     <button 
-                        onClick={() => setViewApplicantsJob(job)}
-                        disabled={job.applicants.length === 0}
-                        className="px-4 py-2 bg-brand-primary/10 text-brand-primary hover:bg-brand-primary hover:text-white rounded-xl font-bold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                     >
-                        View Applicants
-                     </button>
-                   </div>
+                   <h2 className="text-4xl md:text-5xl font-black text-brand-text-main mb-6 leading-tight">Ready to get things done? 🛠️</h2>
+                   <p className="text-brand-text-variant text-xl max-w-2xl mb-12 leading-relaxed">
+                      Your marketplace is currently quiet. Start a new project today and let LingkodHub's professionals handle the rest.
+                   </p>
                    
-                   <div className="flex gap-2">
-                     <button className="flex-1 py-2 bg-brand-surface hover:bg-brand-surface-card text-brand-text-variant hover:text-brand-text-main rounded-xl font-semibold text-xs transition-colors border border-brand-outline flex items-center justify-center gap-1.5 shadow-sm">
-                        <ArrowUpCircle size={14} /> Bump
-                     </button>
-                      <button className="flex-1 py-2 bg-brand-surface hover:bg-brand-surface-card text-brand-text-variant hover:text-brand-text-main rounded-xl font-semibold text-xs transition-colors border border-brand-outline flex items-center justify-center gap-1.5 shadow-sm">
-                         Edit Details
-                      </button>
-                      <button 
-                         onClick={() => setShowDeleteModal(job)}
-                         className="flex-shrink-0 w-10 py-2 bg-brand-surface hover:bg-red-50 text-brand-text-variant hover:text-red-500 rounded-xl font-semibold text-xs transition-colors border border-brand-outline hover:border-red-200 flex items-center justify-center shadow-sm"
-                         title="Delete Post"
-                      >
-                         <Trash2 size={14} />
-                      </button>
+                   <div className="w-full max-w-2xl">
+                      <div className="flex items-center justify-center gap-4 mb-8">
+                         <div className="h-px flex-1 bg-brand-outline"></div>
+                         <span className="text-xs font-black text-brand-text-variant uppercase tracking-[0.2em]">Quick Start by Category</span>
+                         <div className="h-px flex-1 bg-brand-outline"></div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-12">
+                         {[
+                            { name: 'Cleaning', icon: '🧹' },
+                            { name: 'Repair', icon: '🔧' },
+                            { name: 'Tutoring', icon: '📚' },
+                            { name: 'Electrical', icon: '⚡' },
+                            { name: 'Plumbing', icon: '🚰' },
+                            { name: 'Delivery', icon: '📦' }
+                         ].map(cat => (
+                            <button 
+                               key={cat.name}
+                               onClick={() => {
+                                  setInvitedProvider(null);
+                                  setFormCategory(cat.name);
+                                  setFormTitle(`${cat.name} Service Needed`);
+                                  setShowPostModal(true);
+                               }}
+                               className="flex flex-col items-center gap-3 p-6 bg-brand-surface border-2 border-brand-outline rounded-[2rem] hover:border-brand-primary hover:shadow-xl hover:shadow-brand-primary/5 transition-all group active:scale-95"
+                            >
+                               <span className={`text-3xl group-hover:scale-125 transition-transform duration-300`}>{cat.icon}</span>
+                               <span className="font-black text-brand-text-main text-sm">{cat.name}</span>
+                            </button>
+                         ))}
+                      </div>
+                      
                    </div>
                 </div>
              </div>
           </div>
-        ))}
-
-        {!isLoading && activePosts.length === 0 && (
-           <div className="col-span-1 md:col-span-2 py-16 flex flex-col items-center justify-center text-center bg-brand-surface-card border border-brand-outline rounded-3xl border-dashed">
-              <div className="w-20 h-20 bg-brand-primary/5 rounded-full flex items-center justify-center mb-6">
-                 <CheckSquare size={40} className="text-brand-primary/40" />
-              </div>
-              <h3 className="text-xl font-semibold text-brand-text-main mb-2">No active posts</h3>
-              <p className="text-brand-text-variant text-sm max-w-sm">Tap "Post a New Task" to find workers for your needs.</p>
-           </div>
-        )}
-     </div>
-
-     {/* Post Modal */}
-     {showPostModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-           {/* Backdrop */}
-           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowPostModal(false)}></div>
-           
-           {/* Modal Content */}
-           <div className="relative bg-brand-surface-card w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[95vh] flex flex-col text-left">
-              {/* Header */}
-              <div className="p-6 border-b border-brand-outline bg-brand-surface/50 flex justify-between items-center shrink-0">
-                 <div>
-                    <h3 className="text-xl font-bold text-brand-text-main">
-                        {invitedProvider ? `Invite ${invitedProvider.full_name}` : 'Post a New Task'}
-                    </h3>
-                    <p className="text-xs text-brand-text-variant mt-0.5">Fill in the details to find the best provider for you.</p>
-                 </div>
-                 <button 
-                  onClick={() => setShowPostModal(false)}
-                  className="p-2 text-brand-text-variant hover:text-brand-text-main hover:bg-brand-outline/50 rounded-full transition-colors bg-brand-surface shadow-sm border border-brand-outline"
-                 >
-                    <X size={20} />
-                 </button>
-              </div>
-
-              {/* Body */}
-              <div className="p-8 overflow-y-auto flex-1 bg-brand-surface">
-                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                    
-                    {/* Left Column: The Basics */}
-                    <div className="space-y-10">
-                       {invitedProvider && (
-                         <div className="bg-brand-primary/5 border-2 border-brand-primary/20 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
-                            <img src={invitedProvider.avatar_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt={invitedProvider.full_name} className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" />
-                            <div>
-                              <p className="text-[10px] font-bold text-brand-primary uppercase tracking-widest">Inviting Professional</p>
-                              <h4 className="text-sm font-bold text-brand-text-main">{invitedProvider.full_name}</h4>
-                            </div>
-                         </div>
-                       )}
-
-                       <section className="space-y-6">
-                          <div className="flex items-center gap-3 border-b border-brand-outline pb-3">
-                             <div className="w-8 h-8 rounded-lg bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-                                <Info size={18} />
-                             </div>
-                             <h4 className="text-sm font-bold text-brand-text-main uppercase tracking-widest">Section A: The Basics</h4>
-                          </div>
-                          
-                          <div className="space-y-6">
-                             <div>
-                                <label className="block text-xs font-bold text-brand-text-variant uppercase tracking-wider mb-2 ml-1">Job Title</label>
-                                <input 
-                                   type="text" 
-                                   value={formTitle}
-                                   onChange={(e) => setFormTitle(e.target.value)}
-                                   placeholder="e.g., Need a Plumber for Kitchen Sink" 
-                                   className={`w-full p-4 rounded-2xl border-2 hover:border-brand-primary/50 focus:ring-8 focus:ring-brand-primary/5 shadow-sm transition-all font-medium ${formError.includes('Title') ? 'border-red-400 focus:border-red-500 hover:border-red-400/50' : 'border-brand-outline focus:border-brand-primary'} text-sm text-brand-text-main placeholder:text-brand-text-variant/40 focus:outline-none`}
-                                />
-                             </div>
-                             
-                             <div>
-                                <label className="block text-xs font-bold text-brand-text-variant uppercase tracking-wider mb-2 ml-1">Category</label>
-                                <div className="relative group">
-                                   <select 
-                                      value={formCategory}
-                                      onChange={(e) => setFormCategory(e.target.value)}
-                                      className="w-full p-4 rounded-2xl border-2 hover:border-brand-primary/50 focus:ring-8 focus:ring-brand-primary/5 shadow-sm transition-all font-medium border-brand-outline text-sm text-brand-text-main bg-brand-surface focus:outline-none focus:border-brand-primary appearance-none cursor-pointer"
-                                   >
-                                      <option value="" disabled>Select a category</option>
-                                      <option value="Cleaning">Cleaning</option>
-                                      <option value="Repair">Repair</option>
-                                      <option value="Plumbing">Plumbing</option>
-                                      <option value="Electrical">Electrical</option>
-                                      <option value="Tutoring">Tutoring</option>
-                                      <option value="General">General</option>
-                                   </select>
-                                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-brand-text-variant group-hover:text-brand-primary transition-colors">
-                                      <ChevronRight size={18} className="transform rotate-90" />
-                                   </div>
-                                </div>
-                             </div>
-
-                             <div>
-                                <label className="block text-xs font-bold text-brand-text-variant uppercase tracking-wider mb-2 ml-1">Task Description</label>
-                                <textarea 
-                                   value={formDesc}
-                                   onChange={(e) => setFormDesc(e.target.value)}
-                                   placeholder="The sink has been leaking since last night... I need someone to check the pipes and fix any leaks. Material costs can be discussed." 
-                                   className="w-full p-4 rounded-2xl border-2 hover:border-brand-primary/50 focus:ring-8 focus:ring-brand-primary/5 shadow-sm transition-all border-brand-outline text-sm text-brand-text-main placeholder:text-brand-text-variant/40 focus:outline-none focus:border-brand-primary resize-none h-[220px] leading-relaxed"
-                                />
-                             </div>
-                          </div>
-                       </section>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 content-start pb-20">
+            {activePosts.map(job => (
+              <div 
+                key={job.id} 
+                className={`group bg-brand-surface-card border-2 ${job.is_urgent ? 'border-orange-500 shadow-xl shadow-orange-500/10' : 'border-brand-outline hover:border-brand-primary hover:shadow-2xl hover:shadow-brand-primary/10'} p-8 rounded-[2.5rem] transition-all relative flex flex-col h-full min-h-[400px] ${job.is_paused ? 'opacity-75' : ''}`}
+              >
+                 <div className="flex justify-between items-start mb-6">
+                    <div className="flex flex-col gap-2">
+                       <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-4 py-1.5 bg-brand-primary/10 text-brand-primary text-[10px] font-black rounded-full uppercase tracking-[0.1em] border border-brand-primary/20">
+                             {job.category || 'General'}
+                          </span>
+                          {job.is_urgent && (
+                             <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-orange-500 text-white text-[10px] font-black rounded-full uppercase tracking-[0.1em] shadow-lg shadow-orange-500/20 animate-pulse">
+                                <AlertTriangle size={12} /> Priority
+                             </span>
+                          )}
+                       </div>
+                       <div className="flex items-center gap-1.5 mt-1">
+                          <div className={`w-2 h-2 rounded-full ${job.applicants.length > 0 ? 'bg-brand-primary animate-ping' : 'bg-brand-text-variant/30'}`}></div>
+                          <span className="text-[10px] font-black text-brand-text-variant uppercase tracking-widest">
+                             {job.provider_id ? 'Waiting for Professional to Accept' : (job.applicants.length === 0 ? 'Awaiting Bids' : `${job.applicants.length} Active Applicants`)}
+                          </span>
+                       </div>
                     </div>
+                    <button 
+                      onClick={() => setActivePosts(prev => prev.map(p => p.id === job.id ? {...p, is_paused: !p.is_paused} : p))}
+                      className={`flex items-center gap-2 p-2 px-4 rounded-2xl border-2 transition-all font-bold text-[10px] uppercase tracking-widest ${job.is_paused ? 'bg-brand-outline/10 border-brand-outline text-brand-text-variant' : 'bg-[#059669]/5 border-[#059669]/20 text-[#059669] hover:bg-[#059669]/10'}`}
+                    >
+                      {job.is_paused ? 'Hidden' : 'Visible'}
+                    </button>
+                 </div>
+                 <div className="mb-6 flex-1">
+                    <h3 className={`text-2xl font-black leading-tight mb-4 group-hover:text-brand-primary transition-colors ${job.is_urgent ? 'text-orange-600' : 'text-brand-text-main'}`}>
+                       {job.title}
+                    </h3>
+                    <p className="text-brand-text-variant text-sm line-clamp-3 leading-relaxed mb-6 font-medium">
+                       {job.description}
+                    </p>
+                    <div className="flex flex-wrap gap-3 mb-8">
+                       <div className="flex items-center gap-2 px-3 py-2 bg-brand-surface border border-brand-outline rounded-xl text-[11px] font-bold text-brand-text-main shadow-sm">
+                          <Calendar size={14} className="text-brand-primary" />
+                          {job.is_urgent ? 'Immediate' : new Date(job.created_at).toLocaleDateString()}
+                       </div>
+                       <div className="flex items-center gap-2 px-3 py-2 bg-brand-surface border border-brand-outline rounded-xl text-[11px] font-bold text-brand-text-main shadow-sm">
+                          <MapPin size={14} className="text-brand-primary" />
+                          {job.location}
+                       </div>
+                    </div>
+                    <div className="bg-brand-surface/80 backdrop-blur-sm p-4 rounded-3xl border border-brand-outline/50 shadow-inner">
+                       <ProcessTimeline currentState="pending" />
+                    </div>
+                 </div>
+                 <div className="flex items-center justify-between mb-8">
+                    <div>
+                       <p className="text-[10px] font-black text-brand-text-variant uppercase tracking-[0.2em] mb-1">Project Budget</p>
+                       <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-black text-brand-text-main">₱{job.budget?.toLocaleString()}</span>
+                       </div>
+                    </div>
+                    <div className="flex -space-x-3">
+                       {job.applicants.slice(0, 3).map((app: any, i: number) => (
+                          <img key={i} src={app.avatar_url} className="w-10 h-10 rounded-full border-4 border-brand-surface-card object-cover shadow-md" alt="Avatar" />
+                       ))}
+                    </div>
+                 </div>
+                 <div className="pt-6 border-t border-brand-outline/50 flex flex-col gap-4">
+                    <button 
+                      onClick={() => setViewApplicantsJob(job)}
+                      disabled={job.provider_id ? true : job.applicants.length === 0}
+                      className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 ${job.provider_id ? 'bg-amber-50 text-amber-600 border border-amber-200 cursor-not-allowed shadow-none' : (job.applicants.length === 0 ? 'bg-brand-outline/20 text-brand-text-variant cursor-not-allowed shadow-none' : 'bg-brand-primary text-white hover:bg-[#059669] shadow-brand-primary/20 hover:scale-[1.01]')}`}
+                    >
+                       {job.provider_id ? 'Waiting for Acceptance...' : `View All Bids ${job.applicants.length > 0 ? `(${job.applicants.length})` : ''}`}
+                       {!job.provider_id && <ChevronRight size={18} />}
+                    </button>
+                    <div className="flex gap-3">
+                       <button className="flex-1 py-3 bg-brand-surface hover:bg-brand-surface-card text-brand-text-main rounded-2xl font-black text-[10px] uppercase tracking-widest border border-brand-outline transition-all flex items-center justify-center gap-2">
+                          <ArrowUpCircle size={14} className="text-brand-primary" /> Bump
+                       </button>
+                       <button 
+                          onClick={() => setShowDeleteModal(job)}
+                          className="w-12 py-3 bg-brand-surface hover:bg-red-500 hover:text-white text-red-500 rounded-2xl border border-red-100 hover:border-red-500 transition-all flex items-center justify-center shadow-sm"
+                       >
+                          <Trash2 size={16} />
+                       </button>
+                    </div>
+                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-                    {/* Right Column: Logistics & Compensation */}
-                    <div className="space-y-10">
-                       {/* Section B: Logistics */}
-                       <section className="space-y-6">
-                          <div className="flex items-center gap-3 border-b border-brand-outline pb-3">
-                             <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-600">
-                                <Clock size={18} />
-                             </div>
-                             <h4 className="text-sm font-bold text-brand-text-main uppercase tracking-widest">Section B: Logistics</h4>
-                          </div>
+      {/* Enhanced Post Modal */}
+      {showPostModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={() => setShowPostModal(false)}></div>
+            <div className="relative bg-brand-surface-card w-full max-w-5xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col text-left max-h-[95vh] border border-white/10">
+               {/* Modal Header */}
+               <div className="p-8 border-b border-brand-outline flex justify-between items-center bg-brand-surface/50 backdrop-blur-md sticky top-0 z-10">
+                  <div className="flex items-center gap-4">
+                     <div className="w-12 h-12 bg-brand-primary/20 rounded-2xl flex items-center justify-center text-brand-primary shadow-inner">
+                        <Plus size={24} />
+                     </div>
+                     <div>
+                        <h3 className="text-2xl font-black text-brand-text-main tracking-tight uppercase">
+                           {invitedProvider ? `Inviting ${invitedProvider.full_name}` : 'Create a New Task'}
+                        </h3>
+                        <p className="text-sm font-medium text-brand-text-variant">Fill in the logistics and secure your professional.</p>
+                     </div>
+                  </div>
+                  <button onClick={() => setShowPostModal(false)} className="p-3 bg-brand-surface border border-brand-outline text-brand-text-variant hover:text-brand-text-main rounded-2xl transition-all shadow-sm">
+                     <X size={20} />
+                  </button>
+               </div>
 
-                          <div className="space-y-6">
-                             <div>
-                                 <label className="block text-xs font-bold text-brand-text-variant uppercase tracking-wider mb-2 ml-1">Service Location</label>
-                                 {addresses.length > 0 ? (
-                                   <div className="flex flex-col gap-3">
-                                      <div className="relative group">
-                                         <select 
-                                           value={selectedAddressId}
-                                           onChange={(e) => {
+               {/* Modal Body */}
+               <div className="p-10 overflow-y-auto bg-brand-surface/30">
+                  {formError && (
+                     <div className="mb-8 p-4 bg-red-50 border-2 border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-shake">
+                        <AlertTriangle size={20} />
+                        <span className="font-bold text-sm uppercase tracking-wider">{formError}</span>
+                     </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                     {/* Left: Project Scope */}
+                     <div className="space-y-10">
+                        <div className="flex items-center gap-3 border-b border-brand-outline pb-4">
+                           <ShieldCheck size={20} className="text-brand-primary" />
+                           <h4 className="text-sm font-black text-brand-text-main uppercase tracking-widest">Section 1: Scope & Detail</h4>
+                        </div>
+                        <div className="space-y-8">
+                           <div>
+                              <label className="block text-[10px] font-black text-brand-text-variant uppercase tracking-[0.2em] mb-3 ml-1">What do you need help with?</label>
+                              <input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="e.g., Deep Cleaning for 3BR Apartment" className="w-full p-5 rounded-[1.5rem] border-2 border-brand-outline focus:border-brand-primary focus:ring-8 focus:ring-brand-primary/5 transition-all text-sm font-bold text-brand-text-main bg-brand-surface outline-none" />
+                           </div>
+                           <div className="grid grid-cols-2 gap-6">
+                              <div>
+                                 <label className="block text-[10px] font-black text-brand-text-variant uppercase tracking-[0.2em] mb-3 ml-1">Service Type</label>
+                                 <select value={formCategory} onChange={(e) => setFormCategory(e.target.value)} className="w-full p-5 rounded-[1.5rem] border-2 border-brand-outline focus:border-brand-primary focus:ring-8 focus:ring-brand-primary/5 transition-all text-sm font-bold text-brand-text-main bg-brand-surface outline-none appearance-none cursor-pointer">
+                                    <option value="" disabled>Choose Category</option>
+                                    <option value="Cleaning">Cleaning</option>
+                                    <option value="Repair">Repair</option>
+                                    <option value="Plumbing">Plumbing</option>
+                                    <option value="Electrical">Electrical</option>
+                                    <option value="Tutoring">Tutoring</option>
+                                    <option value="General">General Service</option>
+                                 </select>
+                              </div>
+                              <div>
+                                 <label className="block text-[10px] font-black text-brand-text-variant uppercase tracking-[0.2em] mb-3 ml-1">Your Budget (₱)</label>
+                                 <input type="number" value={formBudget} onChange={(e) => setFormBudget(e.target.value)} placeholder="500" className="w-full p-5 rounded-[1.5rem] border-2 border-brand-outline focus:border-brand-primary focus:ring-8 focus:ring-brand-primary/5 transition-all text-lg font-black text-brand-text-main bg-brand-surface outline-none" />
+                              </div>
+                           </div>
+                           <div>
+                              <label className="block text-[10px] font-black text-brand-text-variant uppercase tracking-[0.2em] mb-3 ml-1">Describe the job</label>
+                              <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} placeholder="The more detail you provide, the better bids you'll receive..." className="w-full p-5 rounded-[1.5rem] border-2 border-brand-outline focus:border-brand-primary focus:ring-8 focus:ring-brand-primary/5 transition-all text-sm font-bold text-brand-text-main bg-brand-surface outline-none h-44 resize-none leading-relaxed" />
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* Right: Logistics & Payment */}
+                     <div className="space-y-10">
+                        <div className="flex items-center gap-3 border-b border-brand-outline pb-4">
+                           <MapPin size={20} className="text-blue-500" />
+                           <h4 className="text-sm font-black text-brand-text-main uppercase tracking-widest">Section 2: Timing & Logistics</h4>
+                        </div>
+                        <div className="space-y-8">
+                           {/* Location Selection */}
+                           <div>
+                              <label className="block text-[10px] font-black text-brand-text-variant uppercase tracking-[0.2em] mb-3 ml-1">Where should the service happen?</label>
+                              <div className="space-y-4">
+                                 {addresses.length > 0 && (
+                                    <div className="relative group">
+                                       <select 
+                                          value={selectedAddressId} 
+                                          onChange={(e) => {
                                              const val = e.target.value;
                                              setSelectedAddressId(val);
-                                             if (val !== 'custom') {
-                                               const addr = addresses.find(a => a.id.toString() === val);
-                                               if (addr) setFormLocation(addr.address_text);
+                                             if (val !== 'new') {
+                                                const addr = addresses.find(a => a.id.toString() === val);
+                                                if (addr) setFormLocation(addr.address_text);
+                                             } else {
+                                                setFormLocation('');
                                              }
-                                           }}
-                                           className="w-full p-4 rounded-2xl border-2 border-brand-outline hover:border-brand-primary/50 focus:border-brand-primary focus:ring-8 focus:ring-brand-primary/5 shadow-sm transition-all font-medium text-sm text-brand-text-main bg-brand-surface focus:outline-none appearance-none cursor-pointer"
-                                         >
-                                           {addresses.map(addr => (
+                                          }}
+                                          className="w-full p-5 rounded-[1.5rem] border-2 border-brand-outline hover:border-brand-primary focus:border-brand-primary transition-all text-sm font-bold text-brand-text-main bg-brand-surface outline-none appearance-none cursor-pointer pr-12"
+                                       >
+                                          {addresses.map(addr => (
                                              <option key={addr.id} value={addr.id.toString()}>
-                                               {addr.label}: {addr.address_text} {addr.is_default ? '(Default)' : ''}
+                                                📍 {addr.label}: {addr.address_text}
                                              </option>
-                                           ))}
-                                           <option value="custom">Use a different address...</option>
-                                         </select>
-                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-brand-text-variant group-hover:text-brand-primary transition-colors">
-                                            <ChevronRight size={18} className="transform rotate-90" />
-                                         </div>
-                                      </div>
-                                     
-                                     {selectedAddressId === 'custom' && (
-                                       <div className="relative group animate-in slide-in-from-top-2 duration-300">
-                                         <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-variant group-focus-within:text-brand-primary transition-colors" size={18} />
-                                         <input 
-                                            type="text" 
-                                            value={formLocation}
-                                            onChange={(e) => setFormLocation(e.target.value)}
-                                            placeholder="Enter custom location..." 
-                                            className="w-full p-4 pl-12 rounded-2xl border-2 border-brand-outline hover:border-brand-primary/50 focus:border-brand-primary focus:ring-8 focus:ring-brand-primary/5 shadow-sm transition-all font-medium text-sm text-brand-text-main placeholder:text-brand-text-variant/40 focus:outline-none"
-                                         />
-                                       </div>
-                                     )}
-                                   </div>
-                                 ) : (
-                                   <div className="relative group">
-                                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-variant group-focus-within:text-brand-primary transition-colors" size={18} />
-                                      <input 
-                                         type="text" 
-                                         value={formLocation}
-                                         onChange={(e) => setFormLocation(e.target.value)}
-                                         placeholder="e.g., Barangay Paliparan, Dasmariñas" 
-                                         className="w-full p-4 pl-12 rounded-2xl border-2 border-brand-outline hover:border-brand-primary/50 focus:border-brand-primary focus:ring-8 focus:ring-brand-primary/5 shadow-sm transition-all font-medium text-sm text-brand-text-main placeholder:text-brand-text-variant/40 focus:outline-none"
-                                      />
-                                   </div>
+                                          ))}
+                                          <option value="new">➕ Add a new address...</option>
+                                       </select>
+                                       <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-brand-text-variant group-hover:text-brand-primary pointer-events-none" size={20} />
+                                    </div>
                                  )}
-                              </div>
-
-                             <div className="flex flex-col sm:flex-row gap-4 items-end">
-                                <div className="flex-1 w-full">
-                                   <label className="block text-xs font-bold text-brand-text-variant uppercase tracking-wider mb-2 ml-1">Scheduled Date & Time</label>
-                                   <div className="relative group">
-                                      <Calendar className={`absolute left-4 top-1/2 -translate-y-1/2 ${formIsASAP ? 'text-gray-300' : 'text-brand-text-variant group-focus-within:text-brand-primary'} transition-colors`} size={18} />
-                                      <input 
-                                         type="datetime-local" 
-                                         value={formDate}
-                                         onChange={(e) => setFormDate(e.target.value)}
-                                         disabled={formIsASAP}
-                                         className="w-full p-4 pl-12 rounded-2xl border-2 hover:border-brand-primary/50 focus:ring-8 focus:ring-brand-primary/5 shadow-sm transition-all font-medium border-brand-outline text-sm text-brand-text-main bg-brand-surface focus:outline-none focus:border-brand-primary disabled:opacity-50 disabled:bg-gray-50/50 disabled:border-brand-outline/50"
-                                      />
-                                   </div>
-                                </div>
-                                
-                                <div className="shrink-0 pb-1">
-                                   <label className="flex items-center gap-3 cursor-pointer group bg-brand-surface p-3 px-4 rounded-2xl border-2 border-brand-outline hover:border-orange-500/30 transition-all shadow-sm h-[54px]">
-                                      <div className={`w-10 h-5 rounded-full flex items-center transition-all px-0.5 ${formIsASAP ? 'bg-orange-500 justify-end' : 'bg-gray-300 justify-start'}`}>
-                                         <div className="w-4 h-4 bg-white rounded-full shadow-md"></div>
-                                      </div>
-                                      <div className="flex flex-col">
-                                         <span className={`text-xs font-bold ${formIsASAP ? 'text-orange-600' : 'text-brand-text-main'} select-none transition-colors`}>ASAP</span>
-                                         <span className="text-[10px] text-brand-text-variant">Post as urgent</span>
-                                      </div>
-                                      <input 
-                                         type="checkbox" 
-                                         checked={formIsASAP} 
-                                         onChange={(e) => setFormIsASAP(e.target.checked)} 
-                                         className="hidden" 
-                                      />
-                                   </label>
-                                </div>
-                             </div>
-                          </div>
-                       </section>
-
-                       {/* Section C: Compensation */}
-                       <section className="space-y-6">
-                          <div className="flex items-center gap-3 border-b border-brand-outline pb-3">
-                             <div className="w-8 h-8 rounded-lg bg-[#059669]/10 flex items-center justify-center text-[#059669]">
-                                <Banknote size={18} />
-                             </div>
-                             <h4 className="text-sm font-bold text-brand-text-main uppercase tracking-widest">Section C: Compensation</h4>
-                          </div>
-
-                          <div className="space-y-6">
-                             <div className="flex flex-col sm:flex-row gap-4 items-end">
-                                <div className="flex-1 w-full">
-                                   <label className="block text-xs font-bold text-brand-text-variant uppercase tracking-wider mb-2 ml-1">Project Budget (₱)</label>
-                                   <div className="relative group">
-                                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-brand-text-main group-focus-within:text-brand-primary transition-colors text-lg">₱</span>
-                                      <input 
-                                         type="number" 
-                                         value={formBudget}
-                                         onChange={(e) => setFormBudget(e.target.value)}
-                                         placeholder="e.g., 500" 
-                                         className={`w-full p-4 pl-10 rounded-2xl border-2 hover:border-brand-primary/50 focus:ring-8 focus:ring-brand-primary/5 shadow-sm transition-all font-bold text-lg ${formError.includes('Price') ? 'border-red-400 focus:border-red-500 hover:border-red-400/50' : 'border-brand-outline focus:border-brand-primary'} text-brand-text-main placeholder:text-brand-text-variant/30 focus:outline-none`}
-                                      />
-                                   </div>
-                                </div>
-                                
-                                <div className="shrink-0 pb-1">
-                                   <label className="flex items-center gap-3 cursor-pointer group bg-brand-surface p-3 px-4 rounded-2xl border-2 border-brand-outline hover:border-brand-primary/30 transition-all shadow-sm h-[54px]">
-                                      <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${formNegotiable ? 'bg-brand-primary border-brand-primary' : 'bg-white border-brand-outline group-hover:border-brand-primary'}`}>
-                                         {formNegotiable && <CheckCircle size={14} className="text-white" />}
-                                      </div>
-                                      <div className="flex flex-col">
-                                         <span className="text-xs font-bold text-brand-text-main select-none group-hover:text-brand-primary transition-colors">Negotiable</span>
-                                         <span className="text-[10px] text-brand-text-variant">Open for offers</span>
-                                      </div>
-                                      <input 
-                                         type="checkbox" 
-                                         checked={formNegotiable} 
-                                         onChange={(e) => setFormNegotiable(e.target.checked)} 
-                                         className="hidden" 
-                                      />
-                                   </label>
-                                </div>
-                             </div>
-                             
-                              <div className="space-y-4">
-                                 <div className="flex items-center justify-between ml-1">
-                                    <label className="block text-xs font-bold text-brand-text-variant uppercase tracking-wider">Preferred Payment Method</label>
-                                 </div>
-                                 
-                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <label className={`relative flex items-center gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${formPayment === 'gcash' ? 'border-blue-500 bg-blue-50/30' : 'border-brand-outline hover:border-blue-200 bg-brand-surface'}`}>
+                                 {(selectedAddressId === 'new' || addresses.length === 0) && (
+                                    <div className="relative animate-in slide-in-from-top-2 duration-300">
+                                       <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-brand-text-variant" size={20} />
                                        <input 
-                                          type="radio" 
-                                          name="payment" 
-                                          value="gcash" 
-                                          checked={formPayment === 'gcash'} 
-                                          onChange={() => setFormPayment('gcash')} 
-                                          className="hidden" 
+                                          value={formLocation} 
+                                          onChange={(e) => setFormLocation(e.target.value)} 
+                                          placeholder="Enter the complete service address..." 
+                                          className="w-full p-5 pl-14 rounded-[1.5rem] border-2 border-brand-primary/30 bg-brand-primary/5 focus:border-brand-primary focus:ring-8 focus:ring-brand-primary/5 transition-all text-sm font-bold text-brand-text-main outline-none" 
                                        />
-                                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${formPayment === 'gcash' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-brand-surface-container text-brand-text-variant'}`}>
-                                          <Smartphone size={20} />
-                                       </div>
-                                       <div className="flex-1 overflow-hidden">
-                                          <span className={`block font-bold text-sm ${formPayment === 'gcash' ? 'text-blue-600' : 'text-brand-text-main'}`}>GCash</span>
-                                          {userData?.gcash_number ? (
-                                            <span className="text-[9px] font-medium text-brand-text-variant tracking-widest truncate block">{userData.gcash_number.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</span>
-                                          ) : (
-                                            <span className="text-[9px] font-medium text-red-400">Not linked</span>
-                                          )}
-                                       </div>
-                                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${formPayment === 'gcash' ? 'border-blue-500 bg-blue-500' : 'border-brand-outline'}`}>
-                                          {formPayment === 'gcash' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
-                                       </div>
-                                    </label>
-
-                                    <label className={`relative flex items-center gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${formPayment === 'maya' ? 'border-green-500 bg-green-50/30' : 'border-brand-outline hover:border-green-200 bg-brand-surface'}`}>
-                                       <input 
-                                          type="radio" 
-                                          name="payment" 
-                                          value="maya" 
-                                          checked={formPayment === 'maya'} 
-                                          onChange={() => setFormPayment('maya')} 
-                                          className="hidden" 
-                                       />
-                                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${formPayment === 'maya' ? 'bg-green-500 text-white shadow-lg shadow-green-200' : 'bg-brand-surface-container text-brand-text-variant'}`}>
-                                          <Smartphone size={20} />
-                                       </div>
-                                       <div className="flex-1 overflow-hidden">
-                                          <span className={`block font-bold text-sm ${formPayment === 'maya' ? 'text-green-600' : 'text-brand-text-main'}`}>Maya</span>
-                                          {userData?.maya_number ? (
-                                            <span className="text-[9px] font-medium text-brand-text-variant tracking-widest truncate block">{userData.maya_number.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</span>
-                                          ) : (
-                                            <span className="text-[9px] font-medium text-red-400">Not linked</span>
-                                          )}
-                                       </div>
-                                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${formPayment === 'maya' ? 'border-green-500 bg-green-500' : 'border-brand-outline'}`}>
-                                          {formPayment === 'maya' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
-                                       </div>
-                                    </label>
-                                 </div>
-                                 
-                                 {((!userData?.gcash_number && formPayment === 'gcash') || (!userData?.maya_number && formPayment === 'maya')) && (
-                                    <div className="bg-orange-50 border border-orange-100 p-3 rounded-xl flex items-start gap-2 animate-in fade-in duration-500">
-                                       <AlertTriangle className="text-orange-500 shrink-0" size={14} />
-                                       <p className="text-[10px] text-orange-600 leading-tight">You haven't set up your {formPayment === 'gcash' ? 'GCash' : 'Maya'} number in your profile yet.</p>
                                     </div>
                                  )}
                               </div>
-                          </div>
-                       </section>
-                    </div>
-                 </div>
+                           </div>
 
-                 {formError && (
-                    <div className="mt-8 bg-red-50 text-red-600 p-4 rounded-2xl border-2 border-red-100 text-sm font-bold flex items-center gap-3 animate-shake">
-                       <AlertTriangle size={20} className="shrink-0" />
-                       {formError}
-                    </div>
-                 )}
-              </div>
+                           {/* Scheduling */}
+                           <div className="grid grid-cols-2 gap-6">
+                              <div>
+                                 <label className="block text-[10px] font-black text-brand-text-variant uppercase tracking-[0.2em] mb-3 ml-1">Schedule Date</label>
+                                 <div className="relative group">
+                                    <Calendar className={`absolute left-5 top-1/2 -translate-y-1/2 ${formIsASAP ? 'text-gray-300' : 'text-brand-text-variant group-focus-within:text-brand-primary'} transition-colors`} size={20} />
+                                    <input 
+                                       type="datetime-local"
+                                        value={formDate}
+                                        min={new Date().toISOString().slice(0, 16)} 
+                                       onChange={(e) => setFormDate(e.target.value)} 
+                                       disabled={formIsASAP}
+                                       className="w-full p-5 pl-14 rounded-[1.5rem] border-2 border-brand-outline focus:border-brand-primary transition-all text-sm font-bold text-brand-text-main bg-brand-surface outline-none disabled:opacity-30 disabled:grayscale" 
+                                    />
+                                 </div>
+                              </div>
+                              <div className="flex items-end">
+                                 <label className={`flex-1 p-5 rounded-[1.5rem] border-2 transition-all cursor-pointer flex items-center justify-center gap-3 ${formIsASAP ? 'bg-orange-500 border-orange-500 text-white shadow-xl shadow-orange-500/30' : 'bg-brand-surface border-brand-outline text-brand-text-variant hover:border-orange-500/50 hover:bg-orange-50/10'}`}>
+                                    <Zap size={20} className={formIsASAP ? 'animate-pulse' : ''} />
+                                    <span className="text-xs font-black uppercase tracking-[0.1em]">Mark as Urgent</span>
+                                    <input type="checkbox" checked={formIsASAP} onChange={(e) => setFormIsASAP(e.target.checked)} className="hidden" />
+                                 </label>
+                              </div>
+                           </div>
 
-              {/* Footer */}
-              <div className="p-8 border-t border-brand-outline bg-brand-surface/80 backdrop-blur-md flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
-                 <div className="text-left hidden sm:block">
-                    <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-1">Estimated Cost</p>
-                    <p className="text-xl font-black text-brand-text-main">₱{formBudget ? parseInt(formBudget).toLocaleString() : '0'}</p>
-                 </div>
-                 
-                 <div className="flex gap-4 w-full sm:w-auto">
-                    <button 
-                     onClick={() => setShowPostModal(false)}
-                     className="flex-1 sm:flex-none px-8 py-4 text-sm font-bold text-brand-text-variant hover:text-brand-text-main hover:bg-brand-outline/30 transition-all rounded-2xl"
-                    >
-                       Cancel
-                    </button>
-                    <button 
-                     onClick={handlePostJob}
-                     className="flex-1 sm:flex-none px-12 py-4 bg-brand-primary text-white text-sm font-bold hover:bg-[#059669] hover:scale-[1.02] hover:shadow-xl hover:shadow-brand-primary/20 transition-all rounded-2xl active:scale-95 flex items-center justify-center gap-2"
-                    >
-                       <Plus size={18} />
-                       Post Task
-                    </button>
-                 </div>
-              </div>
-           </div>
-        </div>
-     )}
+                           {/* Payment Setup */}
+                           <div>
+                              <label className="block text-[10px] font-black text-brand-text-variant uppercase tracking-[0.2em] mb-4 ml-1">Payout Method</label>
+                              <div className="grid grid-cols-2 gap-4 mb-4">
+                                 <button
+                                     type="button"
+                                     onClick={() => setFormPayment('gcash')}
+                                    className={`p-5 rounded-2xl border-2 flex items-center gap-4 transition-all ${formPayment === 'gcash' ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-600/30' : 'bg-brand-surface border-brand-outline text-brand-text-main hover:border-blue-500/50'}`}
+                                 >
+                                    <Smartphone size={24} />
+                                    <span className="font-black text-sm">GCash</span>
+                                 </button>
+                                 <button
+                                     type="button"
+                                     onClick={() => setFormPayment('maya')}
+                                    className={`p-5 rounded-2xl border-2 flex items-center gap-4 transition-all ${formPayment === 'maya' ? 'bg-green-600 border-green-600 text-white shadow-xl shadow-green-600/30' : 'bg-brand-surface border-brand-outline text-brand-text-main hover:border-green-500/50'}`}
+                                 >
+                                    <Smartphone size={24} />
+                                    <span className="font-black text-sm">Maya</span>
+                                 </button>
+                              </div>
+                              
+                              <div className="relative animate-in fade-in duration-500">
+                                 <div className="absolute left-5 top-1/2 -translate-y-1/2 text-brand-text-variant opacity-50 font-bold text-sm">
+                                    {formPayment === 'gcash' ? 'GCash #' : 'Maya #'}
+                                 </div>
+                                 <input 
+                                    type="text"
+                                    value={formPayment === 'gcash' ? tempGcashNumber : tempMayaNumber}
+                                    onChange={(e) => formPayment === 'gcash' ? setTempGcashNumber(e.target.value) : setTempMayaNumber(e.target.value)}
+                                    placeholder="09XXXXXXXXX"
+                                    className="w-full p-5 pl-24 rounded-[1.5rem] border-2 border-brand-outline focus:border-brand-primary transition-all text-sm font-bold text-brand-text-main bg-brand-surface outline-none"
+                                 />
+                              </div>
+                           </div>
 
-     {/* Delete Post Modal */}
-     {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(null)}></div>
-           <div className="relative bg-brand-surface-card w-full max-w-md rounded-3xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-              <div className="p-8 text-center flex flex-col items-center">
-                 <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-100">
-                    <Trash2 size={32} />
-                 </div>
-                 <h3 className="text-2xl font-bold text-brand-text-main mb-4">Delete Post?</h3>
-                 <p className="text-brand-text-variant mb-8 text-sm leading-relaxed">
-                    Are you sure you want to delete the post <strong>"{showDeleteModal.title}"</strong>? This will also remove any active applicants. This action cannot be undone.
-                 </p>
-                 
-                 <div className="flex w-full gap-3">
-                    <button 
-                       onClick={() => setShowDeleteModal(null)}
-                       className="flex-1 py-3.5 bg-brand-surface border border-brand-outline text-brand-text-main rounded-xl font-semibold text-sm hover:bg-brand-surface-card transition-colors active:scale-[0.98]"
-                    >
-                       Cancel
-                    </button>
-                    <button 
-                       onClick={handleDeletePost}
-                       className="flex-1 py-3.5 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-all shadow-sm active:scale-[0.98]"
-                    >
-                       Delete Post
-                    </button>
-                 </div>
-              </div>
-           </div>
-        </div>
-     )}
-
-     {/* View Applicants Modal */}
-     {viewApplicantsJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-           {/* Backdrop */}
-           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setViewApplicantsJob(null)}></div>
-           
-           {/* Modal Content */}
-           <div className="relative bg-brand-surface-card w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 min-h-[500px] max-h-[90vh] flex flex-col">
-              {/* Header */}
-              <div className="p-6 border-b border-brand-outline bg-brand-surface/50 flex justify-between items-center shrink-0">
-                 <div>
-                    <h3 className="text-xl font-bold text-brand-text-main leading-tight mb-1">Applicants for: {viewApplicantsJob.title}</h3>
-                    <p className="text-sm font-medium text-brand-text-variant flex items-center gap-2">
-                       <span className="flex items-center gap-1"><MapPin size={12}/> {viewApplicantsJob.location}</span>
-                       <span className="text-brand-outline">|</span>
-                       <span className="font-bold text-brand-text-main">Budget: ₱{viewApplicantsJob.budget?.toLocaleString()}</span>
-                    </p>
-                 </div>
-                 <button 
-                  onClick={() => setViewApplicantsJob(null)}
-                  className="p-2 text-brand-text-variant hover:text-brand-text-main hover:bg-brand-outline/50 rounded-full transition-colors bg-brand-surface shadow-sm border border-brand-outline"
-                 >
-                    <X size={20} />
-                 </button>
-              </div>
-
-              {/* Body: Applicant List */}
-              <div className="p-6 overflow-y-auto flex-1 bg-brand-surface">
-                 <div className="flex flex-col gap-4">
-                    {viewApplicantsJob.applicants.map((applicant: any) => (
-                       <div key={applicant.id} className="bg-brand-surface-card border border-brand-outline rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                          
-                          {/* Trust Stats & Info */}
-                           <div className="flex flex-col sm:flex-row gap-5 mb-4 items-start sm:items-center">
-                             <img src={applicant.avatar_url || "https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=100&h=100&auto=format&fit=crop"} alt={applicant.full_name} className="w-16 h-16 rounded-full object-cover border border-brand-outline shadow-sm" />
-                             <div className="flex-1">
-                                <h4 className="text-lg font-bold text-brand-text-main mb-1">{applicant.full_name}</h4>
-                                <div className="flex items-center gap-3">
-                                   <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-100">
-                                      <Star size={14} className="fill-amber-400 text-amber-400" />
-                                      <span className="text-sm font-bold text-amber-700">{applicant.rating || 5.0}</span>
-                                   </div>
-                                   <span className="text-xs font-semibold text-brand-text-variant">@{applicant.username}</span>
-                                </div>
-                             </div>
-                             <div className="text-left sm:text-right w-full sm:w-auto bg-brand-surface sm:bg-transparent p-3 sm:p-0 rounded-xl sm:rounded-none">
-                                <span className="text-xs font-semibold text-brand-text-variant block mb-0.5">Project Budget</span>
-                                <span className="text-xl font-bold text-[#059669]">₱{viewApplicantsJob.budget?.toLocaleString()}</span>
-                             </div>
-                          </div>
-
-                          {/* Message/Proposal */}
-                          <div className="bg-brand-surface p-4 rounded-xl border border-brand-outline mb-5 relative">
-                             <div className="absolute top-0 left-6 -mt-1.5 w-3 h-3 bg-brand-surface border-t border-l border-brand-outline transform rotate-45"></div>
-                             <p className="text-sm text-brand-text-main italic font-medium">"{applicant.message || 'No message provided.'}"</p>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div className="flex gap-3 pt-1">
-                             <button className="flex-1 py-3 bg-brand-surface hover:bg-brand-surface-card border border-brand-outline text-brand-text-main rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm group-hover:border-brand-primary/30">
-                                <MessageCircle size={18} className="text-brand-primary" />
-                                Pre-Hire Chat
-                             </button>
-                             <button 
-                                onClick={() => setHiringInfo({ jobId: viewApplicantsJob.id, applicationId: applicant.id, amount: viewApplicantsJob.budget })}
-                                className="flex-1 py-3 bg-[#059669] hover:bg-[#047857] text-white rounded-xl font-bold text-sm transition-all shadow-sm shadow-[#059669]/20 flex items-center justify-center gap-2 active:scale-95"
-                             >
-                                <CheckCircle size={18} />
-                                Accept & Hire
-                             </button>
-                          </div>
-                          
-                       </div>
-                    ))}
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-      {/* Hire Confirmation Modal */}
-      {hiringInfo && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-           <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setHiringInfo(null)}></div>
-           <div className="relative bg-brand-surface-card w-full max-w-md rounded-[2rem] shadow-2xl border border-brand-outline p-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
-              <div className="text-center mb-8">
-                 <div className="w-16 h-16 bg-brand-primary/10 text-brand-primary rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Banknote size={32} />
-                 </div>
-                 <h3 className="text-2xl font-bold text-brand-text-main">Confirm Payment</h3>
-                 <p className="text-sm text-brand-text-variant mt-2">Choose your preferred payment method to finalize the hire.</p>
-              </div>
-
-              <div className="space-y-4 mb-8">
-                 <button 
-                    onClick={() => setSelectedPayment('gcash')}
-                    className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${selectedPayment === 'gcash' ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline hover:border-brand-primary/50'}`}
-                 >
-                    <div className="flex items-center gap-3">
-                       <div className="w-10 h-7 bg-blue-600 rounded flex items-center justify-center font-bold text-white text-[8px]">GCASH</div>
-                       <div className="flex flex-col items-start">
-                          <span className={`font-bold ${selectedPayment === 'gcash' ? 'text-brand-text-main' : 'text-brand-text-variant'}`}>GCash</span>
-                          {userData?.gcash_number && <span className="text-[10px] text-brand-text-variant">{userData.gcash_number.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</span>}
-                       </div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPayment === 'gcash' ? 'border-brand-primary bg-brand-primary' : 'border-brand-outline'}`}>
-                       {selectedPayment === 'gcash' && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                    </div>
-                 </button>
-
-                 <button 
-                    onClick={() => setSelectedPayment('maya')}
-                    className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${selectedPayment === 'maya' ? 'border-brand-primary bg-brand-primary/5' : 'border-brand-outline hover:border-brand-primary/50'}`}
-                 >
-                    <div className="flex items-center gap-3">
-                       <div className="w-10 h-7 bg-green-500 rounded flex items-center justify-center font-bold text-white text-[8px]">MAYA</div>
-                       <div className="flex flex-col items-start">
-                          <span className={`font-bold ${selectedPayment === 'maya' ? 'text-brand-text-main' : 'text-brand-text-variant'}`}>Maya</span>
-                          {userData?.maya_number && <span className="text-[10px] text-brand-text-variant">{userData.maya_number.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</span>}
-                       </div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPayment === 'maya' ? 'border-brand-primary bg-brand-primary' : 'border-brand-outline'}`}>
-                       {selectedPayment === 'maya' && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                    </div>
-                 </button>
-              </div>
-
-              <div className="bg-brand-surface p-4 rounded-2xl border border-brand-outline mb-8 flex justify-between items-center">
-                 <span className="text-sm font-semibold text-brand-text-variant">Total Payment:</span>
-                 <span className="text-xl font-bold text-brand-text-main">₱{hiringInfo.amount.toLocaleString()}</span>
-              </div>
-
-              <div className="flex gap-3">
-                 <button 
-                    onClick={() => setHiringInfo(null)}
-                    className="flex-1 py-4 bg-brand-surface border border-brand-outline text-brand-text-main font-bold rounded-2xl hover:bg-brand-surface-card transition-colors"
-                 >
-                    Cancel
-                 </button>
-                  <button 
-                     onClick={() => handleHire(hiringInfo.jobId, hiringInfo.applicationId, selectedPayment)}
-                     disabled={isProcessingPayment}
-                     className="flex-1 py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all disabled:opacity-70 disabled:cursor-wait"
-                  >
-                     {isProcessingPayment ? (
-                        <div className="flex items-center justify-center gap-2">
-                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                           <span>Charging Account...</span>
+                           {/* Save Options */}
+                           <label className="flex items-center gap-3 p-4 bg-brand-surface border border-brand-outline rounded-2xl cursor-pointer hover:bg-brand-surface-card transition-colors group">
+                              <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${saveDetails ? 'bg-brand-primary border-brand-primary shadow-lg shadow-brand-primary/20' : 'border-brand-outline group-hover:border-brand-primary'}`}>
+                                 {saveDetails && <CheckCircle size={16} className="text-white" />}
+                              </div>
+                              <span className="text-xs font-bold text-brand-text-main">Save these details to my profile for future tasks</span>
+                              <input type="checkbox" checked={saveDetails} onChange={(e) => setSaveDetails(e.target.checked)} className="hidden" />
+                           </label>
                         </div>
-                     ) : (
-                        "Pay & Hire"
-                     )}
-                  </button>
-              </div>
-           </div>
-        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Modal Footer */}
+               <div className="p-10 border-t border-brand-outline bg-brand-surface/80 backdrop-blur-lg flex justify-between items-center sticky bottom-0 z-10">
+                  <div className="hidden sm:flex items-center gap-4">
+                     <div className="p-3 bg-[#059669]/10 rounded-xl">
+                        <Wallet size={24} className="text-[#059669]" />
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-black text-brand-text-variant uppercase tracking-[0.2em] mb-0.5">Total Commitment</p>
+                        <p className="text-2xl font-black text-brand-text-main">₱{formBudget ? parseInt(formBudget).toLocaleString() : '0'}</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-4 w-full sm:w-auto">
+                     <button onClick={() => setShowPostModal(false)} className="px-8 py-5 font-black text-brand-text-variant hover:text-brand-text-main transition-all uppercase tracking-[0.2em] text-[10px]">Cancel</button>
+                     <button onClick={handlePostJob} className="px-12 py-5 bg-brand-primary text-white rounded-[1.5rem] font-black text-sm hover:bg-[#047857] hover:scale-[1.05] shadow-2xl shadow-brand-primary/40 transition-all active:scale-95 flex items-center gap-3 uppercase tracking-wider">
+                        <Plus size={20} /> List Task Now
+                     </button>
+                  </div>
+               </div>
+            </div>
+         </div>
       )}
+
+      {/* Delete Confirmation */}
+      {showDeleteModal && (
+         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(null)}></div>
+            <div className="relative bg-brand-surface-card w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 text-center animate-in fade-in zoom-in-95 duration-200 border border-white/10">
+               <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-6 border-2 border-red-100">
+                  <Trash2 size={36} />
+               </div>
+               <h3 className="text-2xl font-black text-brand-text-main mb-4 tracking-tight uppercase">Revoke Listing?</h3>
+               <p className="text-brand-text-variant mb-10 font-medium leading-relaxed">
+                  This will permanently remove <strong>"{showDeleteModal.title}"</strong> and dismiss all current bids.
+               </p>
+               <div className="flex gap-4">
+                  <button onClick={() => setShowDeleteModal(null)} className="flex-1 py-4 bg-brand-surface border border-brand-outline rounded-2xl font-black text-xs uppercase tracking-widest text-brand-text-main hover:bg-brand-surface-card transition-all">Dismiss</button>
+                  <button onClick={handleDeletePost} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20 hover:bg-red-700 transition-all">Delete Post</button>
+               </div>
+            </div>
+         </div>
+      )}
+      {/* Applicants Modal */}
+      {viewApplicantsJob && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={() => setViewApplicantsJob(null)}></div>
+            <div className="relative bg-brand-surface-card w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col text-left max-h-[85vh] border border-white/10">
+               <div className="p-8 border-b border-brand-outline flex justify-between items-center bg-brand-surface/50 backdrop-blur-md sticky top-0 z-10">
+                  <div>
+                     <h3 className="text-2xl font-black text-brand-text-main tracking-tight uppercase">
+                        Review Bids: {viewApplicantsJob.title}
+                     </h3>
+                     <p className="text-sm font-medium text-brand-text-variant mt-1">Select the best professional for your task.</p>
+                  </div>
+                  <button onClick={() => setViewApplicantsJob(null)} className="p-3 bg-brand-surface border border-brand-outline text-brand-text-variant hover:text-brand-text-main rounded-2xl transition-all shadow-sm">
+                     <X size={20} />
+                  </button>
+               </div>
+               <div className="p-8 overflow-y-auto bg-brand-surface/30 space-y-4">
+                  {viewApplicantsJob.applicants.length === 0 ? (
+                     <div className="text-center py-12">
+                        <div className="w-16 h-16 bg-brand-surface border-2 border-brand-outline rounded-3xl flex items-center justify-center mx-auto mb-4">
+                           <Users size={24} className="text-brand-text-variant" />
+                        </div>
+                        <p className="text-brand-text-main font-bold">No bids received yet.</p>
+                        <p className="text-sm text-brand-text-variant mt-2">Professionals will appear here once they apply.</p>
+                     </div>
+                  ) : (
+                     viewApplicantsJob.applicants.map((app: any) => (
+                        <div key={app.id} className="bg-brand-surface border-2 border-brand-outline rounded-3xl p-6 flex flex-col sm:flex-row gap-6 items-start sm:items-center hover:border-brand-primary/50 transition-all hover:shadow-lg">
+                           <img src={app.avatar_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt={app.full_name} className="w-16 h-16 rounded-2xl object-cover border-2 border-brand-outline" />
+                           <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                 <h4 className="text-lg font-black text-brand-text-main">{app.full_name || 'Professional'}</h4>
+                                 <span className="bg-brand-primary/10 text-brand-primary text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">Verified</span>
+                              </div>
+                              <p className="text-sm font-medium text-brand-text-variant mb-4 bg-brand-surface-card p-3 rounded-xl border border-brand-outline/50">"{app.message || 'I am interested in this task and available to help.'}"</p>
+                              <div className="flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-widest text-brand-text-variant">
+                                 <span className="flex items-center gap-1.5"><Star size={14} className="text-amber-500" /> 4.9 Rating</span>
+                                 <span className="flex items-center gap-1.5"><MapPin size={14} className="text-blue-500" /> {app.location || 'Local Provider'}</span>
+                              </div>
+                           </div>
+                            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                               <button
+                                  onClick={async () => {
+                                     if (!confirm(`Decline application from ${app.full_name}?`)) return;
+                                     try {
+                                        await api.decideApplication(app.id, 'rejected');
+                                        fetchJobs();
+                                     } catch (err) {
+                                        console.error('Failed to decline applicant', err);
+                                     }
+                                  }}
+                                  className="px-6 py-4 bg-brand-surface border border-red-200 text-red-600 text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                               >
+                                  <X size={16} /> Decline
+                               </button>
+                               <button
+                                  onClick={async () => {
+                                     try {
+                                        await api.decideApplication(app.id, 'accepted');
+                                        setViewApplicantsJob(null);
+                                        fetchJobs();
+                                        
+                                        // Trigger a generic event so other components (like HomeDashboard) might refresh
+                                        const channel = new BroadcastChannel('dashboard_sync');
+                                        channel.postMessage({ type: 'DATA_UPDATED' });
+                                        channel.close();
+                                     } catch (err) {
+                                        console.error('Failed to accept applicant', err);
+                                        alert('Failed to accept applicant.');
+                                     }
+                                  }}
+                                  className="px-8 py-4 bg-brand-primary text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-[#059669] transition-all shadow-lg shadow-brand-primary/20 active:scale-95 flex items-center justify-center gap-2"
+                               >
+                                  <CheckCircle size={16} /> Hire Now
+                               </button>
+                            </div>
+                        </div>
+                     ))
+                  )}
+               </div>
+            </div>
+         </div>
+      )}
+
     </div>
   );
 };

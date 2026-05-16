@@ -150,6 +150,16 @@ export function initDb() {
     console.log('[db] Migration: added jobs.provider_id');
   }
 
+  if (!jobCols.includes('is_urgent')) {
+    db.exec('ALTER TABLE jobs ADD COLUMN is_urgent INTEGER DEFAULT 0');
+    console.log('[db] Migration: added jobs.is_urgent');
+  }
+
+  if (!jobCols.includes('category')) {
+    db.exec('ALTER TABLE jobs ADD COLUMN category TEXT');
+    console.log('[db] Migration: added jobs.category');
+  }
+
   const appCols = (db.prepare('PRAGMA table_info(applications)').all() as any[]).map(c => c.name);
   if (!appCols.includes('message')) {
     db.exec('ALTER TABLE applications ADD COLUMN message TEXT DEFAULT ""');

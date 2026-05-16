@@ -138,6 +138,9 @@ export const api = {
     pref_push_marketing?: number;
     is_public_profile?: number;
     show_online_status?: number;
+    gcash_number?: string;
+    maya_number?: string;
+    payment_method?: string;
   }) {
     const response = await this.authFetch(`${API_BASE}/me`, {
       method: 'PUT',
@@ -251,6 +254,8 @@ export const api = {
     is_negotiable: boolean;
     payment_method: string;
     provider_id?: number;
+    is_urgent?: boolean;
+    scheduled_at?: string | null;
   }) {
     const response = await this.authFetch(`${API_BASE}/jobs`, {
       method: 'POST',
@@ -267,6 +272,14 @@ export const api = {
   async deleteJob(id: number) {
     const response = await this.authFetch(`${API_BASE}/jobs/${id}`, { method: 'DELETE' });
     return this.safeJson(response, 'Failed to delete job');
+  },
+
+  async bulkDeleteJobs(ids: number[]) {
+    const response = await this.authFetch(`${API_BASE}/jobs/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+    return this.safeJson(response, 'Failed to bulk delete jobs');
   },
 
   async updateJobStatus(id: number, status: 'in_progress' | 'completed' | 'cancelled') {
