@@ -25,8 +25,8 @@ LingkodHub facilitates the entire lifecycle of local service procurement—from 
 ### Backend
 - **Runtime**: [Node.js](https://nodejs.org/)
 - **Framework**: [Express](https://expressjs.com/)
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Execution**: [TSX](https://tsx.is/) (TypeScript Execution)
+- **Language**: [JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript) (ES Modules)
+- **Execution**: [Nodemon](https://nodemon.io/) (Development)
 - **Validation**: [Zod](https://zod.dev/)
 
 ### Database & Security
@@ -53,8 +53,8 @@ LingkodHub facilitates the entire lifecycle of local service procurement—from 
 │   ├── users.ts        # User profile and service settings
 │   └── ...             # Notifications, Messages, Applications
 ├── middleware/         # Express Middleware (Auth guards, error handling)
-├── server.ts           # Unified Server (Express + Vite Middleware)
-├── db.ts               # Database Schema & Initialization
+├── server.js           # Unified Server (Express + Vite Middleware)
+├── db.js               # Database Schema & Initialization
 ├── database.sqlite     # Local SQLite Database file
 └── package.json        # Dependencies and Scripts
 ```
@@ -67,22 +67,24 @@ LingkodHub facilitates the entire lifecycle of local service procurement—from 
 - **Secure Auth**: JWT-based authentication with refresh token rotation.
 - **Profile Customization**: Users can update bio, location, contact info, and avatar.
 - **Service Specialization**: Providers can select specific categories (e.g., Plumbing, Electrical, Cleaning) they specialize in.
+- **Localization**: Language toggle option for multilingual support.
 
 ### Job Lifecycle
 - **Job Posting**: Clients can post jobs with descriptions, budget, and location.
 - **Applications**: Providers can apply for jobs with custom messages.
 - **Status Tracking**: Jobs move through states: `pending` → `in_progress` → `completed` or `cancelled`.
+- **Hiring Handshake**: Synchronized provider arrival and client confirmation workflow.
 
 ### Communication & Feedback
 - **Messaging**: Integrated chat system for clients and providers to discuss job details.
-- **Notifications**: Real-time alerts for new messages, application updates, and job milestones.
+- **Notifications**: Real-time alerts for new messages, application updates, and job milestones using cross-tab synchronization.
 - **Reviews**: Mutual feedback system where clients rate providers upon job completion.
 
 ---
 
 ## 5. Database Schema
 
-The system uses a relational schema managed in `db.ts`:
+The system uses a relational schema managed in `db.js`:
 
 - **`users`**: Stores credentials, roles, and profile data.
 - **`services`**: Master list of available service categories.
