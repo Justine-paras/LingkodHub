@@ -144,7 +144,7 @@ export const TopBar = ({ isDark, toggleTheme, role = 'client' }: { isDark: boole
                     <BadgeCheck size={14} className="text-brand-primary fill-brand-primary/10" />
                   )}
                 </p>
-                <p className="text-xs text-brand-text-variant font-light">{userProfile?.username ? `@${userProfile.username}` : (role === 'client' ? 'Homeowner' : 'Service Provider')}</p>
+                <p className="text-xs text-brand-text-variant font-light">{role === 'client' ? 'Homeowner' : 'Service Provider'}</p>
             </div>
             <div className="relative">
               <div className="w-10 h-10 rounded-full border border-brand-outline p-0.5 overflow-hidden">

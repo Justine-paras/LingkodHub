@@ -3,7 +3,6 @@ import {
   User, 
   MapPin, 
   Clock, 
-  Phone, 
   CheckCircle, 
   FileText, 
   ChevronRight, 
@@ -12,10 +11,12 @@ import {
 } from 'lucide-react';
 import { api } from '../../../services/api';
 import { ProcessTimeline } from '../shared/ProcessTimeline';
+import { UserProfileModal } from '../shared/UserProfileModal';
 
 export const ProviderOngoingTasksSection = () => {
   const [activeSupportJob, setActiveSupportJob] = React.useState<number | null>(null);
   const [tasks, setTasks] = React.useState<any[]>([]);
+  const [selectedClientId, setSelectedClientId] = React.useState<number | null>(null);
 
   const fetchTasks = React.useCallback(async () => {
     try {
@@ -136,9 +137,13 @@ export const ProviderOngoingTasksSection = () => {
               <h3 className="text-3xl font-bold text-brand-text-main mb-6 leading-tight">{task.title}</h3>
               
               <div className="space-y-4 mb-10">
-                <div className="flex items-center gap-3 text-sm text-brand-text-variant font-semibold">
-                  <User size={18} className="text-brand-primary" />
-                  <span>Client: {task.client_name}</span>
+                <div 
+                   onClick={() => setSelectedClientId(task.client_id)}
+                   className="flex items-center gap-3 text-sm text-brand-text-variant font-semibold cursor-pointer hover:text-brand-primary group/client transition-colors"
+                   title="Click to view client profile"
+                >
+                  <User size={18} className="text-brand-primary group-hover/client:scale-110 transition-transform" />
+                  <span>Client: <span className="font-bold border-b border-dashed border-brand-outline group-hover/client:border-brand-primary">{task.client_name}</span></span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-brand-text-variant font-semibold">
                   <MapPin size={18} className="text-brand-primary" />
@@ -151,12 +156,6 @@ export const ProviderOngoingTasksSection = () => {
               </div>
 
               <div className="mt-auto flex flex-wrap gap-3">
-                <button 
-                   onClick={() => alert(`Calling ${task.client_name} at ${task.client_phone || 'No phone available'}...`)}
-                   className="px-6 py-3 bg-brand-surface border border-brand-outline rounded-2xl font-bold text-xs hover:bg-brand-surface-card transition-all flex items-center gap-2"
-                >
-                  <Phone size={16} className="text-brand-primary" /> Call Client
-                </button>
                 {task.status === 'pending' ? (
                    <div className="flex gap-3">
                       <button 
@@ -271,6 +270,11 @@ export const ProviderOngoingTasksSection = () => {
           </div>
         ))}
       </div>
+      <UserProfileModal 
+        userId={selectedClientId} 
+        isOpen={selectedClientId !== null} 
+        onClose={() => setSelectedClientId(null)} 
+      />
     </div>
   );
 };

@@ -96,21 +96,14 @@ export const Sidebar = ({ activeTab, onTabChange, role = 'client' }: { activeTab
     <aside className="w-[280px] h-screen fixed left-0 top-0 bg-brand-surface border-r border-brand-outline flex flex-col z-50">
       <div className="px-8 py-10">
         <div className="flex items-center gap-3 mb-1 mt-2">
-          <svg className="w-9 h-9 shrink-0 relative top-[-1px]" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50" cy="50" r="50" fill="#10b981"/>
-            <path d="M50 30 C 65 30 75 45 75 60 C 75 75 65 80 50 80 C 35 80 25 75 25 60 C 25 45 35 30 50 30 Z" fill="white"/>
-            <path d="M50 45 C 55 45 58 52 58 65 C 58 72 55 70 50 70 C 45 70 42 72 42 65 C 42 52 45 45 50 45 Z" fill="#10b981"/>
-            <circle cx="50" cy="24" r="10" fill="white" stroke="#10b981" strokeWidth="3"/>
-            <circle cx="28" cy="68" r="10" fill="white" stroke="#10b981" strokeWidth="3"/>
-            <circle cx="72" cy="68" r="10" fill="white" stroke="#10b981" strokeWidth="3"/>
-            <path d="M41 28 Q 28 35 22 45" stroke="white" strokeWidth="6" strokeLinecap="round" fill="none"/>
-            <path d="M59 28 Q 72 35 78 45" stroke="white" strokeWidth="6" strokeLinecap="round" fill="none"/>
-            <path d="M35 76 Q 50 85 65 76" stroke="white" strokeWidth="6" strokeLinecap="round" fill="none"/>
-          </svg>
-          <div>
-            <span className="font-bold tracking-tight text-brand-text-main text-xl">LingkodHub</span>
-            <p className="text-[11px] text-brand-text-variant font-medium">Your neighborhood app</p>
+          <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-md shadow-brand-primary/10">
+            <img 
+              src="/assets/logo.png" 
+              alt="Lingkod Hub Logo" 
+              className="w-[160%] h-[160%] max-w-none object-cover" 
+            />
           </div>
+          <span className="font-black tracking-tighter text-brand-text-main text-2xl">Lingkod Hub</span>
         </div>
       </div>
 

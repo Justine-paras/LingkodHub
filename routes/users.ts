@@ -43,7 +43,7 @@ const addressSchema = z.object({
 
 router.get('/me', authenticateToken, (req: AuthRequest, res: Response) => {
   const user = db.prepare(
-    'SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?'
+    'SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, verification_selfie_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?'
   ).get(req.user!.id);
   if (!user) { res.status(404).json({ error: 'User not found.' }); return; }
   res.json(user);
@@ -95,7 +95,7 @@ router.put('/me', authenticateToken, validate(updateMeSchema), (req: AuthRequest
   }
 
   res.json(db.prepare(
-    'SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?'
+    'SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, verification_selfie_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?'
   ).get(req.user!.id));
 });
 
@@ -183,6 +183,7 @@ router.get('/me/applications', authenticateToken, (req: AuthRequest, res: Respon
     SELECT a.*,
       j.title, j.description, j.location AS job_location,
       j.budget, j.payment_method, j.status AS job_status,
+      j.client_id AS client_id,
       c.full_name AS client_name, c.avatar_url AS client_avatar, c.phone AS client_phone
     FROM applications a
     JOIN jobs j ON a.job_id = j.id
@@ -192,19 +193,45 @@ router.get('/me/applications', authenticateToken, (req: AuthRequest, res: Respon
   `).all(req.user!.id));
 });
 
-router.post('/me/documents', authenticateToken, upload.single('document'), (req: AuthRequest, res: Response) => {
-  if (!req.file) {
-    res.status(400).json({ error: 'No file uploaded' });
+router.post('/me/documents', authenticateToken, upload.fields([
+  { name: 'document', maxCount: 1 },
+  { name: 'selfie', maxCount: 1 }
+]), (req: AuthRequest, res: Response) => {
+  const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+  const docFile = files?.['document']?.[0];
+  const selfieFile = files?.['selfie']?.[0];
+
+  if (!docFile && !selfieFile) {
+    res.status(400).json({ error: 'No files uploaded' });
     return;
   }
- 
-  const docUrl = `/uploads/${req.file.filename}`;
-  db.prepare('UPDATE users SET verification_document_url = ?, document_status = "pending" WHERE id = ?').run(docUrl, req.user!.id);
- 
-  db.prepare('INSERT INTO notifications (user_id, title, body, type) VALUES (?, ?, ?, ?)')
-    .run(req.user!.id, 'Documents Submitted', 'Your identity documents have been submitted and are under review.', 'info');
 
-  res.json({ document_url: docUrl, status: 'pending' });
+  const currentUser = db.prepare('SELECT verification_document_url, verification_selfie_url FROM users WHERE id = ?').get(req.user!.id) as any;
+
+  const docUrl = docFile ? `/uploads/${docFile.filename}` : currentUser?.verification_document_url;
+  const selfieUrl = selfieFile ? `/uploads/${selfieFile.filename}` : currentUser?.verification_selfie_url;
+
+  // Auto-verify if both exist
+  const isVerified = (docUrl && selfieUrl) ? 1 : 0;
+  const status = isVerified ? 'verified' : 'pending';
+
+  db.prepare('UPDATE users SET verification_document_url = ?, verification_selfie_url = ?, is_documents_verified = ?, document_status = ? WHERE id = ?')
+    .run(docUrl || null, selfieUrl || null, isVerified, status, req.user!.id);
+
+  if (isVerified) {
+    db.prepare('INSERT INTO notifications (user_id, title, body, type) VALUES (?, ?, ?, ?)')
+      .run(req.user!.id, 'Identity Verified', 'Congratulations! Your document and selfie have been verified successfully. You are now a System Verified Provider.', 'success');
+  } else {
+    db.prepare('INSERT INTO notifications (user_id, title, body, type) VALUES (?, ?, ?, ?)')
+      .run(req.user!.id, 'Documents Submitted', 'Your identity documents have been submitted and are under review.', 'info');
+  }
+
+  res.json({ 
+    document_url: docUrl, 
+    selfie_url: selfieUrl,
+    is_documents_verified: isVerified,
+    status 
+  });
 });
 
 // ─── Addresses ────────────────────────────────────────────────────────────────
@@ -250,6 +277,24 @@ router.patch('/me/addresses/:id/default', authenticateToken, (req: AuthRequest, 
   })();
 
   res.json({ success: true });
+});
+
+router.get('/users/:id', authenticateToken, (req: AuthRequest, res: Response) => {
+  const user = db.prepare(`
+    SELECT u.id, u.role, u.full_name, u.avatar_url, u.location, u.about_me, u.payment_method, u.created_at,
+      COALESCE(r.avg_rating, 0) AS avg_rating,
+      COALESCE(r.total_reviews, 0) AS total_reviews
+    FROM users u
+    LEFT JOIN (
+      SELECT reviewee_id, AVG(rating) AS avg_rating, COUNT(*) AS total_reviews
+      FROM reviews
+      GROUP BY reviewee_id
+    ) r ON u.id = r.reviewee_id
+    WHERE u.id = ?
+  `).get(req.params.id);
+
+  if (!user) { res.status(404).json({ error: 'User not found.' }); return; }
+  res.json(user);
 });
 
 export default router;

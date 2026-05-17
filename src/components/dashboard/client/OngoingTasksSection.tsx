@@ -4,7 +4,6 @@ import {
   Smartphone, 
   Banknote, 
   Star, 
-  Phone, 
   X, 
   AlertTriangle, 
   CheckCircle,
@@ -124,7 +123,10 @@ export const OngoingTasksSection = () => {
         }
       }
 
-      // 2. Create Review (if rating/comment provided)
+      // 2. Mark as Completed
+      await api.updateJobStatus(Math.floor(job.id), 'completed');
+
+      // 3. Create Review (if rating/comment provided)
       if (rating > 0) {
         try {
           await api.createReview(Math.floor(job.id), rating, reviewComment || 'Excellent work!');
@@ -132,9 +134,6 @@ export const OngoingTasksSection = () => {
           console.warn('Failed to submit review', e);
         }
       }
-
-      // 3. Mark as Completed
-      await api.updateJobStatus(Math.floor(job.id), 'completed');
       
       const channel = new BroadcastChannel('dashboard_sync');
       channel.postMessage({ type: 'DATA_UPDATED' });
@@ -219,7 +218,17 @@ export const OngoingTasksSection = () => {
 
                      {/* Worker Profile */}
                      <div className="flex flex-col items-center shrink-0 w-24">
-                       <img src={task.provider_avatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt={task.provider_name || 'Provider'} className="w-24 h-24 rounded-3xl object-cover border-2 border-brand-outline mb-3 shadow-md" />
+                       {task.provider_avatar ? (
+                          <img 
+                             src={task.provider_avatar.startsWith('http') ? task.provider_avatar : `http://localhost:3000${task.provider_avatar}`} 
+                             alt={task.provider_name || 'Provider'} 
+                             className="w-24 h-24 rounded-3xl object-cover border-2 border-brand-outline mb-3 shadow-md" 
+                          />
+                       ) : (
+                          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white text-3xl font-extrabold mb-3 border-2 border-brand-outline shadow-md shrink-0">
+                             {task.provider_name ? task.provider_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                          </div>
+                       )}
                      </div>
 
                      {/* Job Context */}
@@ -253,13 +262,7 @@ export const OngoingTasksSection = () => {
 
                         {/* Actions */}
                         <div className="flex flex-col md:flex-row items-center justify-between gap-6 mt-2 w-full pt-6 border-t border-brand-outline">
-                           <button 
-                              onClick={() => alert(`Worker phone: ${task.provider_phone || 'No phone available'}`)}
-                              className="relative flex items-center gap-2 px-8 py-3 bg-brand-surface border border-brand-outline rounded-2xl hover:bg-brand-surface-card transition-all shadow-sm font-bold text-brand-text-main text-xs w-full md:w-auto justify-center"
-                           >
-                              <Phone size={18} className="text-brand-primary" />
-                              Call Professional
-                           </button>
+
 
                            <div className="flex items-center justify-center md:justify-end gap-3 w-full md:w-auto">
                               <button 

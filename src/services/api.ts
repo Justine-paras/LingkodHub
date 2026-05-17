@@ -199,9 +199,14 @@ export const api = {
     return this.safeJson(response, 'Upload failed');
   },
 
-  async uploadDocuments(file: File) {
+  async uploadDocuments(documentFile?: File | null, selfieFile?: File | null) {
     const formData = new FormData();
-    formData.append('document', file);
+    if (documentFile) {
+      formData.append('document', documentFile);
+    }
+    if (selfieFile) {
+      formData.append('selfie', selfieFile);
+    }
     const response = await fetch(`${API_BASE}/me/documents`, {
       method: 'POST',
       body: formData,
@@ -249,6 +254,7 @@ export const api = {
   async createJob(data: {
     title: string;
     description: string;
+    category?: string;
     location: string;
     budget: number;
     is_negotiable: boolean;
@@ -341,6 +347,11 @@ export const api = {
   async getProvider(id: number) {
     const response = await this.authFetch(`${API_BASE}/providers/${id}`);
     return this.safeJson(response, 'Failed to fetch provider');
+  },
+
+  async getUser(id: number) {
+    const response = await this.authFetch(`${API_BASE}/users/${id}`);
+    return this.safeJson(response, 'Failed to fetch user profile');
   },
 
   // ─── Messaging ─────────────────────────────────────────────────────────────

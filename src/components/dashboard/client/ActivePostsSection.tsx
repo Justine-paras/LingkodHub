@@ -6,7 +6,6 @@ import {
   Calendar, 
   MapPin, 
   Star, 
-  ArrowUpCircle, 
   Trash2, 
   X, 
   ChevronRight, 
@@ -418,11 +417,25 @@ export const ActivePostsSection = ({
                           <span className="text-2xl font-black text-brand-text-main">₱{job.budget?.toLocaleString()}</span>
                        </div>
                     </div>
-                    <div className="flex -space-x-3">
-                       {job.applicants.slice(0, 3).map((app: any, i: number) => (
-                          <img key={i} src={app.avatar_url} className="w-10 h-10 rounded-full border-4 border-brand-surface-card object-cover shadow-md" alt="Avatar" />
-                       ))}
-                    </div>
+                     <div className="flex -space-x-3">
+                        {job.applicants.slice(0, 3).map((app: any, i: number) => (
+                           app.avatar_url ? (
+                              <img 
+                                 key={i} 
+                                 src={app.avatar_url.startsWith('http') ? app.avatar_url : `http://localhost:3000${app.avatar_url}`} 
+                                 className="w-10 h-10 rounded-full border-4 border-brand-surface-card object-cover shadow-md" 
+                                 alt="Avatar" 
+                              />
+                           ) : (
+                              <div 
+                                 key={i} 
+                                 className="w-10 h-10 rounded-full border-4 border-brand-surface-card bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white text-[10px] font-black shadow-md uppercase shrink-0"
+                              >
+                                 {app.full_name ? app.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                              </div>
+                           )
+                        ))}
+                     </div>
                  </div>
                  <div className="pt-6 border-t border-brand-outline/50 flex flex-col gap-4">
                     <button 
@@ -433,17 +446,14 @@ export const ActivePostsSection = ({
                        {job.provider_id ? 'Waiting for Acceptance...' : `View All Bids ${job.applicants.length > 0 ? `(${job.applicants.length})` : ''}`}
                        {!job.provider_id && <ChevronRight size={18} />}
                     </button>
-                    <div className="flex gap-3">
-                       <button className="flex-1 py-3 bg-brand-surface hover:bg-brand-surface-card text-brand-text-main rounded-2xl font-black text-[10px] uppercase tracking-widest border border-brand-outline transition-all flex items-center justify-center gap-2">
-                          <ArrowUpCircle size={14} className="text-brand-primary" /> Bump
-                       </button>
-                       <button 
-                          onClick={() => setShowDeleteModal(job)}
-                          className="w-12 py-3 bg-brand-surface hover:bg-red-500 hover:text-white text-red-500 rounded-2xl border border-red-100 hover:border-red-500 transition-all flex items-center justify-center shadow-sm"
-                       >
-                          <Trash2 size={16} />
-                       </button>
-                    </div>
+                    <div className="flex gap-3 w-full">
+                        <button 
+                           onClick={() => setShowDeleteModal(job)}
+                           className="w-full py-3.5 bg-brand-surface hover:bg-red-500 hover:text-white text-red-500 rounded-2xl border border-red-100 hover:border-red-500 transition-all flex items-center justify-center gap-2 shadow-sm font-black text-[10px] uppercase tracking-widest"
+                        >
+                           <Trash2 size={14} /> Delete Task
+                        </button>
+                     </div>
                  </div>
               </div>
             ))}
@@ -714,7 +724,17 @@ export const ActivePostsSection = ({
                   ) : (
                      viewApplicantsJob.applicants.map((app: any) => (
                         <div key={app.id} className="bg-brand-surface border-2 border-brand-outline rounded-3xl p-6 flex flex-col sm:flex-row gap-6 items-start sm:items-center hover:border-brand-primary/50 transition-all hover:shadow-lg">
-                           <img src={app.avatar_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt={app.full_name} className="w-16 h-16 rounded-2xl object-cover border-2 border-brand-outline" />
+                           {app.avatar_url ? (
+                              <img 
+                                 src={app.avatar_url.startsWith('http') ? app.avatar_url : `http://localhost:3000${app.avatar_url}`} 
+                                 alt={app.full_name} 
+                                 className="w-16 h-16 rounded-2xl object-cover border-2 border-brand-outline" 
+                              />
+                           ) : (
+                               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white text-xl font-extrabold border-2 border-brand-outline shrink-0 shadow-sm">
+                                  {app.full_name ? app.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                               </div>
+                           )}
                            <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                  <h4 className="text-lg font-black text-brand-text-main">{app.full_name || 'Professional'}</h4>

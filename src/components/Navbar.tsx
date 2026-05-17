@@ -2,6 +2,35 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, ChevronRight, LogOut, LayoutDashboard } from 'lucide-react';
 import { api } from '../services/api';
+import { useLanguage } from './LanguageContext';
+
+export function LanguageSwitcher() {
+  const { language, setLanguage } = useLanguage();
+  return (
+    <div className="flex items-center gap-0.5 bg-gray-100/80 p-1 rounded-2xl border border-gray-200/40 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]">
+      <button
+        onClick={() => setLanguage('taglish')}
+        className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all duration-300 ${
+          language === 'taglish'
+            ? 'bg-white text-brand-primary shadow-sm scale-105'
+            : 'text-gray-400 hover:text-gray-800'
+        }`}
+      >
+        Taglish
+      </button>
+      <button
+        onClick={() => setLanguage('english')}
+        className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all duration-300 ${
+          language === 'english'
+            ? 'bg-white text-brand-primary shadow-sm scale-105'
+            : 'text-gray-400 hover:text-gray-800'
+        }`}
+      >
+        English
+      </button>
+    </div>
+  );
+}
 
 export default function Navbar() {
   const location = useLocation();
@@ -10,6 +39,7 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -27,9 +57,9 @@ export default function Navbar() {
   }, []);
 
   const navLinks = [
-    { label: 'Maghanap ng Serbisyo', path: '/services' },
-    { label: 'Tungkol sa Amin', path: '/about' },
-    { label: 'Paano Gumagana?', path: '/#how-it-works' },
+    { label: t('nav', 'findServices'), path: '/services' },
+    { label: t('nav', 'aboutUs'), path: '/about' },
+    { label: t('nav', 'howItWorks'), path: '/#how-it-works' },
   ];
 
   const isActive = (path: string) => {
@@ -45,11 +75,15 @@ export default function Navbar() {
           : 'bg-white border-b border-transparent py-5'
       }`}
     >
-      <nav className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
+      <nav className="max-w-7xl mx-auto px-8 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-3 group relative z-50">
-          <div className="w-10 h-10 bg-brand-primary rounded-xl flex items-center justify-center shadow-lg shadow-brand-primary/20 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
-            <span className="text-white font-black text-xl leading-none">L</span>
+          <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-md shadow-brand-primary/10 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
+            <img 
+              src="/assets/logo.png" 
+              alt="Lingkod Hub Logo" 
+              className="w-[160%] h-[160%] max-w-none object-cover" 
+            />
           </div>
           <span className="hidden sm:block text-2xl font-black tracking-tighter text-gray-900 group-hover:text-brand-primary transition-colors">
             Lingkod Hub
@@ -75,6 +109,8 @@ export default function Navbar() {
 
         {/* Desktop Actions */}
         <div className="hidden md:flex items-center gap-3">
+          <LanguageSwitcher />
+          <div className="w-px h-6 bg-gray-200/80 mx-1"></div>
           {loading ? (
             <div className="w-24 h-10 bg-gray-100 animate-pulse rounded-xl"></div>
           ) : user ? (
@@ -84,7 +120,7 @@ export default function Navbar() {
                 className="flex items-center gap-2 text-sm font-bold text-brand-primary bg-brand-primary/5 px-6 py-3 rounded-2xl hover:bg-brand-primary hover:text-white transition-all shadow-sm"
               >
                 <LayoutDashboard size={18} />
-                Dashboard
+                {t('nav', 'dashboard')}
               </Link>
               <button 
                 onClick={async () => {
@@ -104,13 +140,13 @@ export default function Navbar() {
                 to="/login" 
                 className="text-sm font-bold text-gray-500 px-6 py-3 hover:text-gray-900 transition-all"
               >
-                Mag-login
+                {t('nav', 'login')}
               </Link>
               <Link 
                 to="/signup" 
                 className="text-sm font-bold text-white px-8 py-3.5 bg-gray-900 rounded-2xl shadow-xl shadow-black/10 hover:bg-brand-primary hover:-translate-y-1 transition-all active:translate-y-0 min-w-[140px] text-center"
               >
-                Simulan Na
+                {t('nav', 'getStarted')}
               </Link>
             </>
           )}
@@ -132,6 +168,12 @@ export default function Navbar() {
         } lg:hidden pt-28 px-8 overflow-y-auto`}
       >
         <div className="space-y-6 pb-12">
+          {/* Mobile Language Switcher */}
+          <div className="flex justify-between items-center bg-gray-50 p-4 rounded-[2rem] border border-gray-100/60 mb-2">
+            <span className="text-xs font-black uppercase tracking-wider text-gray-400 pl-2">Wika / Language</span>
+            <LanguageSwitcher />
+          </div>
+
           <div className="flex flex-col gap-2">
             {navLinks.map((link) => (
               <Link
@@ -160,7 +202,7 @@ export default function Navbar() {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="flex items-center justify-center w-full py-5 bg-brand-primary text-white rounded-[1.5rem] font-black text-lg shadow-xl shadow-brand-primary/20"
                 >
-                  Pumunta sa Dashboard
+                  {t('nav', 'goToDashboard')}
                 </Link>
                 <button 
                   onClick={async () => {
@@ -171,7 +213,7 @@ export default function Navbar() {
                   }}
                   className="flex items-center justify-center w-full py-5 bg-white border-2 border-red-100 text-red-500 rounded-[1.5rem] font-bold text-lg"
                 >
-                  Logout ng Account
+                  {t('nav', 'logout')}
                 </button>
               </>
             ) : (
@@ -181,14 +223,14 @@ export default function Navbar() {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="flex items-center justify-center w-full py-5 bg-brand-primary text-white rounded-[1.5rem] font-black text-lg shadow-xl shadow-brand-primary/20"
                 >
-                  Mag-register na (Libre lang!)
+                  {t('nav', 'registerFree')}
                 </Link>
                 <Link 
                   to="/login" 
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="flex items-center justify-center w-full py-5 bg-white border-2 border-gray-100 text-gray-900 rounded-[1.5rem] font-bold text-lg"
                 >
-                  Login sa Account
+                  {t('nav', 'providerLogin')}
                 </Link>
               </>
             )}

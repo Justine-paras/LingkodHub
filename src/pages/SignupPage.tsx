@@ -22,16 +22,43 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ALL_SERVICES, COMMON_SERVICES } from '../constants';
+import { useLanguage } from '../components/LanguageContext';
 
 type AccountType = 'client' | 'provider';
 
 export default function SignupPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { t } = useLanguage();
   const [step, setStep] = React.useState(1);
   const [accountType, setAccountType] = React.useState<AccountType>(
     (searchParams.get('type') as AccountType) || 'client'
   );
+
+  const idFrontInputRef = React.useRef<HTMLInputElement>(null);
+  const selfieInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleIdFrontChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFormData(prev => ({
+        ...prev,
+        idFrontFile: file,
+        idFrontUrl: URL.createObjectURL(file)
+      }));
+    }
+  };
+
+  const handleSelfieChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFormData(prev => ({
+        ...prev,
+        selfieFile: file,
+        selfieUrl: URL.createObjectURL(file)
+      }));
+    }
+  };
 
   // Form State
   const [formData, setFormData] = React.useState({
@@ -47,6 +74,10 @@ export default function SignupPage() {
     services: [] as string[],
     agreedToTOS: false,
     idType: 'National ID',
+    idFrontFile: null as File | null,
+    idFrontUrl: '',
+    selfieFile: null as File | null,
+    selfieUrl: '',
   });
 
   const [isTOSOpen, setIsTOSOpen] = React.useState(false);
@@ -84,6 +115,10 @@ export default function SignupPage() {
       if (accountType === 'provider' && formData.services && formData.services.length > 0) {
         await api.updateMyServices(formData.services);
       }
+
+      if (accountType === 'provider' && (formData.idFrontFile || formData.selfieFile)) {
+        await api.uploadDocuments(formData.idFrontFile, formData.selfieFile);
+      }
       
       setIsSuccess(true);
       
@@ -100,7 +135,7 @@ export default function SignupPage() {
     }
   };
 
-  const stepsCount = accountType === 'provider' ? 5 : 3;
+  const stepsCount = accountType === 'provider' ? 6 : 3;
 
   const toggleService = (service: string) => {
     const current = formData.services;
@@ -342,8 +377,12 @@ export default function SignupPage() {
         )}
       </AnimatePresence>
       <Link to="/" className="fixed top-8 left-8 flex items-center gap-3 z-50">
-        <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center shadow-sm">
-          <span className="text-white font-bold text-xl leading-none">L</span>
+        <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm">
+          <img 
+            src="/assets/logo.png" 
+            alt="Lingkod Hub Logo" 
+            className="w-[160%] h-[160%] max-w-none object-cover" 
+          />
         </div>
         <span className="text-2xl font-bold tracking-tight text-brand-text-main">Lingkod Hub</span>
       </Link>
@@ -365,10 +404,9 @@ export default function SignupPage() {
                 <div className="w-20 h-20 bg-brand-primary/10 text-brand-primary rounded-full flex items-center justify-center mx-auto mb-6">
                   <CheckCircle size={40} className="animate-bounce" />
                 </div>
-                <h2 className="text-3xl font-bold text-brand-text-main mb-4">Registration Successful!</h2>
+                <h2 className="text-3xl font-bold text-brand-text-main mb-4">{t('auth', 'regSuccess')}</h2>
                 <p className="text-brand-text-variant font-medium mb-8">
-                  Welcome to Lingkod Hub, {formData.firstName}.<br />
-                  Redirecting you to your {accountType} dashboard...
+                  {formData.firstName}, {t('auth', 'redirecting')}
                 </p>
                 <div className="flex justify-center gap-2">
                   <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce [animation-delay:-0.3s]" />
@@ -380,15 +418,16 @@ export default function SignupPage() {
               <motion.div key="form">
                 <div className="text-center mb-8">
                   <h1 className="text-3xl font-bold text-brand-text-main mb-2">
-                    {accountType === 'provider' ? 'Provider Onboarding' : 'Create an account'}
+                    {accountType === 'provider' ? t('auth', 'signupHeaderProvider') : t('auth', 'signupHeaderClient')}
                   </h1>
                   <p className="text-sm text-brand-text-variant font-medium">
-                    {step === 1 && "Choose how you want to use Lingkod Hub"}
-                    {step === 2 && "Tell us a bit more about yourself"}
-                    {step === 3 && accountType === 'provider' && "Define your service area and expertise"}
-                    {step === 4 && accountType === 'provider' && "Verify your identity for platform safety"}
-                    {step === 5 && accountType === 'provider' && "Review our professional standards"}
-                    {step === 3 && accountType === 'client' && "Setup your basic profile"}
+                    {step === 1 && t('auth', 'step1Sub')}
+                    {step === 2 && t('auth', 'step2Sub')}
+                    {step === 3 && accountType === 'provider' && t('auth', 'step3SubProvider')}
+                    {step === 4 && accountType === 'provider' && t('auth', 'step4Sub')}
+                    {step === 5 && accountType === 'provider' && t('auth', 'step5Sub')}
+                    {step === 6 && accountType === 'provider' && t('auth', 'step6Sub')}
+                    {step === 3 && accountType === 'client' && t('auth', 'step3SubClient')}
                   </p>
                 </div>
 
@@ -418,8 +457,8 @@ export default function SignupPage() {
                             }`}>
                               <User size={24} />
                             </div>
-                            <h3 className="font-bold text-brand-text-main mb-1">Hire Talent</h3>
-                            <p className="text-[10px] text-brand-text-variant font-medium leading-relaxed">I'm looking for professional services for my home or business.</p>
+                            <h3 className="font-bold text-brand-text-main mb-1">{t('auth', 'hireTitle')}</h3>
+                            <p className="text-[10px] text-brand-text-variant font-medium leading-relaxed">{t('auth', 'hireDesc')}</p>
                           </button>
                           <button 
                             type="button"
@@ -433,15 +472,15 @@ export default function SignupPage() {
                             }`}>
                               <Briefcase size={24} />
                             </div>
-                            <h3 className="font-bold text-brand-text-main mb-1">Find Work</h3>
-                            <p className="text-[10px] text-brand-text-variant font-medium leading-relaxed">I want to offer my skills and earn money as a verified provider.</p>
+                            <h3 className="font-bold text-brand-text-main mb-1">{t('auth', 'workTitle')}</h3>
+                            <p className="text-[10px] text-brand-text-variant font-medium leading-relaxed">{t('auth', 'workDesc')}</p>
                           </button>
                         </div>
 
                         <div className="space-y-4 pt-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <label className="text-xs font-bold text-brand-text-main ml-1 uppercase tracking-widest">First Name</label>
+                              <label className="text-xs font-bold text-brand-text-main ml-1 uppercase tracking-widest">{t('auth', 'firstName')}</label>
                               <div className="relative">
                                 <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-variant" />
                                 <input 
@@ -455,7 +494,7 @@ export default function SignupPage() {
                               </div>
                             </div>
                             <div className="space-y-2">
-                              <label className="text-xs font-bold text-brand-text-main ml-1 uppercase tracking-widest">Last Name</label>
+                              <label className="text-xs font-bold text-brand-text-main ml-1 uppercase tracking-widest">{t('auth', 'lastName')}</label>
                               <input 
                                 type="text" 
                                 required
@@ -474,7 +513,7 @@ export default function SignupPage() {
                           disabled={!formData.firstName || !formData.lastName}
                           className="w-full py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Continue <ChevronRight size={18} />
+                          {t('auth', 'continueBtn')} <ChevronRight size={18} />
                         </button>
                       </motion.div>
                     )}
@@ -696,6 +735,72 @@ export default function SignupPage() {
                         className="space-y-6"
                       >
                         <div className="space-y-4">
+                          <div className="flex flex-col items-center justify-center gap-2 mb-4">
+                            <div className="relative w-24 h-24 rounded-full bg-brand-surface-card border-2 border-dashed border-brand-outline flex items-center justify-center overflow-hidden hover:border-brand-primary/50 transition-colors group cursor-pointer">
+                              {formData.avatarUrl ? (
+                                <img src={formData.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                              ) : (
+                                <Camera size={24} className="text-brand-text-variant group-hover:text-brand-primary transition-colors" />
+                              )}
+                              <input 
+                                type="file" 
+                                className="absolute inset-0 opacity-0 cursor-pointer" 
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    setFormData({
+                                      ...formData, 
+                                      avatarFile: file,
+                                      avatarUrl: URL.createObjectURL(file)
+                                    });
+                                  }
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs font-bold text-brand-text-main uppercase tracking-widest text-center mt-1">Upload Profile Photo</span>
+                            <p className="text-[10px] text-brand-text-variant text-center font-medium">Show clients who you are! A professional photo increases your hire rate by 80%.</p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-brand-text-main ml-1 uppercase tracking-widest">Professional Bio / About Me</label>
+                            <textarea 
+                              rows={4}
+                              value={formData.aboutMe}
+                              onChange={e => setFormData({...formData, aboutMe: e.target.value})}
+                              placeholder="Describe your skills, experience, and why clients should hire you..."
+                              className="w-full px-5 py-4 bg-brand-surface-card border border-brand-outline rounded-2xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 transition-all text-sm font-medium resize-none" 
+                            />
+                            <p className="text-[10px] text-brand-text-variant ml-1">Tip: Keep it clear, professional, and friendly.</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-4">
+                          <button 
+                            type="button" 
+                            onClick={prevStep}
+                            className="flex-1 py-4 bg-brand-surface border border-brand-outline text-brand-text-main font-bold rounded-2xl hover:bg-brand-surface-card transition-all flex items-center justify-center gap-2"
+                          >
+                            <ChevronLeft size={18} /> Back
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={nextStep}
+                            className="flex-[2] py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all flex items-center justify-center gap-2"
+                          >
+                            Next: Service Area <ChevronRight size={18} />
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {step === 4 && accountType === 'provider' && (
+                      <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="space-y-6"
+                      >
+                        <div className="space-y-4">
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-brand-text-main ml-1 uppercase tracking-widest">Mobile Number</label>
                             <div className="relative">
@@ -805,7 +910,7 @@ export default function SignupPage() {
                       </motion.div>
                     )}
 
-                    {step === 4 && accountType === 'provider' && (
+                    {step === 5 && accountType === 'provider' && (
                       <motion.div 
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -823,18 +928,98 @@ export default function SignupPage() {
                         </div>
 
                         <div className="space-y-4">
+                          <input 
+                            type="file" 
+                            ref={idFrontInputRef} 
+                            accept="image/*" 
+                            onChange={handleIdFrontChange} 
+                            className="hidden" 
+                          />
+                          <input 
+                            type="file" 
+                            ref={selfieInputRef} 
+                            accept="image/*" 
+                            onChange={handleSelfieChange} 
+                            className="hidden" 
+                          />
+
                           <div className="grid grid-cols-2 gap-4">
-                             <div className="aspect-[4/3] bg-brand-surface-card border-2 border-dashed border-brand-outline rounded-3xl flex flex-col items-center justify-center gap-3 group hover:border-brand-primary transition-all cursor-pointer">
-                                <div className="w-10 h-10 rounded-full bg-brand-surface-container flex items-center justify-center text-brand-text-variant group-hover:bg-brand-primary/10 group-hover:text-brand-primary">
-                                   <Upload size={20} />
-                                </div>
-                                <span className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest">ID Front View</span>
+                             {/* ID Front Card */}
+                             <div 
+                                onClick={() => {
+                                  if (!formData.idFrontUrl) idFrontInputRef.current?.click();
+                                }}
+                                className={`aspect-[4/3] bg-brand-surface-card border-2 rounded-3xl flex flex-col items-center justify-center gap-3 group transition-all relative overflow-hidden ${
+                                  formData.idFrontUrl 
+                                    ? 'border-brand-primary/50' 
+                                    : 'border-dashed border-brand-outline hover:border-brand-primary cursor-pointer'
+                                }`}
+                             >
+                                {formData.idFrontUrl ? (
+                                  <>
+                                    <img src={formData.idFrontUrl} alt="ID Front Preview" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-brand-text-main/60 opacity-0 hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                                      <button 
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setFormData(prev => ({ ...prev, idFrontFile: null, idFrontUrl: '' }));
+                                        }}
+                                        className="p-3 bg-red-600 hover:bg-red-700 text-white rounded-full transition-all active:scale-95"
+                                        title="Remove ID"
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                      <span className="text-[10px] font-bold text-white uppercase tracking-widest">Remove ID</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="w-10 h-10 rounded-full bg-brand-surface-container flex items-center justify-center text-brand-text-variant group-hover:bg-brand-primary/10 group-hover:text-brand-primary transition-colors">
+                                       <Upload size={20} />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest group-hover:text-brand-primary transition-colors">ID Front View</span>
+                                  </>
+                                )}
                              </div>
-                             <div className="aspect-[4/3] bg-brand-surface-card border-2 border-dashed border-brand-outline rounded-3xl flex flex-col items-center justify-center gap-3 group hover:border-brand-primary transition-all cursor-pointer">
-                                <div className="w-10 h-10 rounded-full bg-brand-surface-container flex items-center justify-center text-brand-text-variant group-hover:bg-brand-primary/10 group-hover:text-brand-primary">
-                                   <Camera size={20} />
-                                </div>
-                                <span className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest">Verification Selfie</span>
+
+                             {/* Selfie Card */}
+                             <div 
+                                onClick={() => {
+                                  if (!formData.selfieUrl) selfieInputRef.current?.click();
+                                }}
+                                className={`aspect-[4/3] bg-brand-surface-card border-2 rounded-3xl flex flex-col items-center justify-center gap-3 group transition-all relative overflow-hidden ${
+                                  formData.selfieUrl 
+                                    ? 'border-brand-primary/50' 
+                                    : 'border-dashed border-brand-outline hover:border-brand-primary cursor-pointer'
+                                }`}
+                             >
+                                {formData.selfieUrl ? (
+                                  <>
+                                    <img src={formData.selfieUrl} alt="Selfie Preview" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-brand-text-main/60 opacity-0 hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                                      <button 
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setFormData(prev => ({ ...prev, selfieFile: null, selfieUrl: '' }));
+                                        }}
+                                        className="p-3 bg-red-600 hover:bg-red-700 text-white rounded-full transition-all active:scale-95"
+                                        title="Remove Selfie"
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                      <span className="text-[10px] font-bold text-white uppercase tracking-widest">Remove Selfie</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="w-10 h-10 rounded-full bg-brand-surface-container flex items-center justify-center text-brand-text-variant group-hover:bg-brand-primary/10 group-hover:text-brand-primary transition-colors">
+                                       <Camera size={20} />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest group-hover:text-brand-primary transition-colors">Verification Selfie</span>
+                                  </>
+                                )}
                              </div>
                           </div>
                           
@@ -864,7 +1049,8 @@ export default function SignupPage() {
                           <button 
                             type="button" 
                             onClick={nextStep}
-                            className="flex-[2] py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all"
+                            disabled={!formData.idFrontUrl || !formData.selfieUrl}
+                            className="flex-[2] py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all disabled:opacity-50"
                           >
                             Next: Legal Agreement
                           </button>
@@ -872,7 +1058,7 @@ export default function SignupPage() {
                       </motion.div>
                     )}
 
-                    {step === 5 && accountType === 'provider' && (
+                    {step === 6 && accountType === 'provider' && (
                       <motion.div 
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}

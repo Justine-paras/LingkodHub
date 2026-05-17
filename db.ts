@@ -194,6 +194,11 @@ export function initDb() {
     console.log('[db] Migration: added users.document_status columns');
   }
 
+  if (!userCols.includes('verification_selfie_url')) {
+    db.exec('ALTER TABLE users ADD COLUMN verification_selfie_url TEXT');
+    console.log('[db] Migration: added users.verification_selfie_url');
+  }
+
   if (!userCols.includes('pref_email_messages')) {
     db.exec('ALTER TABLE users ADD COLUMN pref_email_messages INTEGER DEFAULT 1');
     db.exec('ALTER TABLE users ADD COLUMN pref_email_updates INTEGER DEFAULT 1');

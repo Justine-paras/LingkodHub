@@ -9,7 +9,10 @@ import {
   Activity,
   Users,
   Banknote,
-  CheckCircle2
+  CheckCircle2,
+  X,
+  CheckCircle,
+  Star
 } from 'lucide-react';
 import { api } from '../../../services/api';
 import { ProcessTimeline } from '../shared/ProcessTimeline';
@@ -32,6 +35,7 @@ export const HomeDashboard = () => {
 
   const [isEmailVerified, setIsEmailVerified] = React.useState(true);
   const [isProfileLoading, setIsProfileLoading] = React.useState(true);
+  const [selectedProviderForView, setSelectedProviderForView] = React.useState<any>(null);
 
   React.useEffect(() => {
     api.getMe().then(user => {
@@ -224,15 +228,28 @@ export const HomeDashboard = () => {
            ) : (
              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                {searchResults.map(provider => (
-                 <div key={provider.id} className="bg-brand-surface-card border border-brand-outline p-6 rounded-2xl hover:border-brand-primary/50 hover:shadow-level-2 transition-all flex flex-col items-center text-center group cursor-pointer">
-                    <img src={provider.avatar_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt={provider.full_name} className="w-24 h-24 rounded-full object-cover mb-4 border-2 border-brand-outline group-hover:border-brand-primary/50 transition-colors" />
+                 <div key={provider.id} onClick={() => setSelectedProviderForView(provider)} className="bg-brand-surface-card border border-brand-outline p-6 rounded-2xl hover:border-brand-primary/50 hover:shadow-level-2 transition-all flex flex-col items-center text-center group cursor-pointer">
+                    {provider.avatar_url ? (
+                       <img 
+                          src={provider.avatar_url.startsWith('http') ? provider.avatar_url : `http://localhost:3000${provider.avatar_url}`} 
+                          alt={provider.full_name} 
+                          className="w-24 h-24 rounded-full object-cover mb-4 border-2 border-brand-outline group-hover:border-brand-primary/50 transition-colors" 
+                       />
+                    ) : (
+                       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white text-3xl font-extrabold mb-4 border-2 border-brand-outline group-hover:border-brand-primary/50 transition-colors shadow-md shrink-0">
+                          {provider.full_name ? provider.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                       </div>
+                    )}
                     <h3 className="text-lg font-bold text-brand-text-main flex items-center gap-2">
                        {provider.full_name}
                        {provider.is_documents_verified === 1 && (
                          <span className="w-2 h-2 rounded-full bg-brand-primary" title="Verified Provider"></span>
                        )}
                     </h3>
-                    <p className="text-sm text-brand-text-variant mb-3">@{provider.username}</p>
+                    <div className="flex items-center gap-1 mt-0.5 mb-3 text-xs font-bold text-amber-500">
+                       <Star size={12} className="fill-current" />
+                       {provider.total_reviews > 0 ? `${provider.avg_rating.toFixed(1)} (${provider.total_reviews} reviews)` : 'New'}
+                    </div>
                     <div className="flex items-center gap-1.5 text-xs font-medium text-brand-text-variant bg-brand-surface px-3 py-1 rounded-full border border-brand-outline mb-4">
                        <MapPin size={12} className="text-brand-primary" /> {provider.location || 'No location specified'}
                     </div>
@@ -354,20 +371,32 @@ export const HomeDashboard = () => {
 
                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {topProviders.length > 0 ? topProviders.map((provider, i) => (
-                     <div key={provider.id} className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-[2rem] hover:border-brand-primary/50 hover:shadow-xl transition-all group flex flex-col relative overflow-hidden">
+                     <div key={provider.id} onClick={() => setSelectedProviderForView(provider)} className="bg-brand-surface-card border-2 border-brand-outline p-6 rounded-[2rem] hover:border-brand-primary/50 hover:shadow-xl transition-all group flex flex-col relative overflow-hidden cursor-pointer">
                         {/* Distance Badge */}
                         <div className="absolute top-6 right-6 bg-brand-primary/10 text-brand-primary px-3 py-1 rounded-full text-[10px] font-bold border border-brand-primary/10">
                            {i === 0 ? '0.8km' : i === 1 ? '1.2km' : '2.5km'} away
                         </div>
 
                         <div className="flex items-center gap-4 mb-6">
-                           <img src={provider.avatar_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt={provider.full_name} className="w-16 h-16 rounded-2xl object-cover border-2 border-brand-outline group-hover:border-brand-primary/50 transition-colors" />
+                           {provider.avatar_url ? (
+                              <img 
+                                 src={provider.avatar_url.startsWith('http') ? provider.avatar_url : `http://localhost:3000${provider.avatar_url}`} 
+                                 alt={provider.full_name} 
+                                 className="w-16 h-16 rounded-2xl object-cover border-2 border-brand-outline group-hover:border-brand-primary/50 transition-colors" 
+                              />
+                           ) : (
+                               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white text-xl font-extrabold border-2 border-brand-outline group-hover:border-brand-primary/50 transition-colors shrink-0 shadow-sm">
+                                  {provider.full_name ? provider.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                               </div>
+                           )}
                            <div>
                               <h3 className="text-lg font-bold text-brand-text-main line-clamp-1">{provider.full_name}</h3>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                  <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-100">
-                                    <Activity size={12} className="text-amber-500 fill-amber-500" />
-                                    <span className="text-xs font-bold text-amber-700">4.9</span>
+                                    <Star size={12} className="fill-amber-500 text-amber-500" />
+                                    <span className="text-xs font-bold text-amber-700">
+                                       {provider.total_reviews > 0 ? provider.avg_rating.toFixed(1) : 'New'}
+                                    </span>
                                  </div>
                                  <span className="text-[10px] font-semibold text-brand-text-variant bg-brand-surface px-2 py-1 rounded-md border border-brand-outline">Verified</span>
                               </div>
@@ -379,7 +408,7 @@ export const HomeDashboard = () => {
                         </p>
 
                         <button 
-                           onClick={() => window.dispatchEvent(new CustomEvent('hire-provider', { detail: provider }))}
+                           onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('hire-provider', { detail: provider })); }}
                            className="w-full py-3.5 bg-brand-surface border-2 border-brand-outline text-brand-text-main font-bold rounded-2xl hover:bg-brand-primary hover:text-white hover:border-brand-primary transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-2 group/btn"
                         >
                            Direct Hire
@@ -490,9 +519,19 @@ export const HomeDashboard = () => {
                      </div>
 
                      <div className="flex items-center gap-4 pt-6 pb-6 border-t border-brand-outline mb-6 -mx-8 px-8">
-                        <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 border-brand-outline">
-                           <img src={job.provider_avatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} alt="Provider" className="w-full h-full object-cover" />
-                        </div>
+                         {job.provider_avatar ? (
+                            <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 border-brand-outline">
+                               <img 
+                                  src={job.provider_avatar.startsWith('http') ? job.provider_avatar : `http://localhost:3000${job.provider_avatar}`} 
+                                  alt="Provider" 
+                                  className="w-full h-full object-cover" 
+                               />
+                            </div>
+                         ) : (
+                             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white font-extrabold text-sm border-2 border-brand-outline shrink-0 shadow-sm">
+                                {job.provider_name ? job.provider_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                             </div>
+                         )}
                         <div className="flex-1 min-w-0">
                            <p className="text-sm text-brand-text-main font-medium truncate">{job.provider_name || 'Assigned Provider'}</p>
                            <p className="text-xs text-brand-text-variant mt-0.5 flex items-center gap-1.5">
@@ -567,6 +606,152 @@ export const HomeDashboard = () => {
             </div>
            
         </div>
+      )}
+
+      {/* Premium Provider Profile Details Modal */}
+      {selectedProviderForView && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/75 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setSelectedProviderForView(null)}></div>
+            <div className="relative bg-brand-surface-card w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col text-left max-h-[90vh] border border-white/10">
+               
+                {/* Close Button Row */}
+                <div className="flex justify-end px-8 pt-6 pb-2 relative z-10">
+                   <button 
+                      onClick={() => setSelectedProviderForView(null)} 
+                      className="p-2.5 bg-brand-surface hover:bg-brand-outline/50 text-brand-text-variant hover:text-brand-text-main rounded-full transition-all border border-brand-outline shadow-sm"
+                   >
+                      <X size={18} />
+                   </button>
+                </div>
+
+                {/* Profile Avatar */}
+                <div className="px-8 pt-2 flex flex-col sm:flex-row sm:items-end gap-5 mb-6 relative z-10">
+                   {selectedProviderForView.avatar_url ? (
+                      <img 
+                         src={selectedProviderForView.avatar_url.startsWith('http') ? selectedProviderForView.avatar_url : `http://localhost:3000${selectedProviderForView.avatar_url}`} 
+                         alt={selectedProviderForView.full_name} 
+                         className="w-28 h-28 rounded-3xl object-cover border-4 border-brand-surface-card bg-brand-surface shadow-xl"
+                      />
+                   ) : (
+                       <div className="w-28 h-28 rounded-3xl bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white font-extrabold text-4xl border-4 border-brand-surface-card shadow-2xl shrink-0">
+                          {selectedProviderForView.full_name ? selectedProviderForView.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                       </div>
+                   )}
+                  <div className="mb-2">
+                     <h3 className="text-2xl font-black text-brand-text-main flex items-center gap-2">
+                        {selectedProviderForView.full_name}
+                        {selectedProviderForView.is_documents_verified === 1 && (
+                          <span className="bg-brand-primary/10 text-brand-primary text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-brand-primary/20 flex items-center gap-1">
+                             <CheckCircle size={10} className="fill-brand-primary text-white" /> Verified
+                          </span>
+                        )}
+                     </h3>
+                     <span className="inline-block mt-1 px-3 py-1 bg-brand-surface-card text-brand-text-variant border border-brand-outline rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        Service Provider
+                     </span>
+                  </div>
+               </div>
+
+               {/* Modal Content Body */}
+               <div className="p-8 overflow-y-auto bg-brand-surface/30 space-y-6">
+                  {/* Detailed Bio */}
+                  <div>
+                     <h4 className="text-xs font-black uppercase tracking-[0.15em] text-brand-text-variant mb-2.5">About Professional</h4>
+                     <div className="bg-brand-surface-card p-5 rounded-2xl border border-brand-outline shadow-inner">
+                        <p className="text-sm text-brand-text-main italic leading-relaxed">
+                           "{selectedProviderForView.about_me || 'This professional is highly dedicated to delivering world-class service with LingkodHub. Ready to assist you anytime!'}"
+                        </p>
+                     </div>
+                  </div>
+
+                  {/* Services & Offerings */}
+                  {selectedProviderForView.services && (
+                     <div>
+                        <h4 className="text-xs font-black uppercase tracking-[0.15em] text-brand-text-variant mb-2.5">Offered Services</h4>
+                        <div className="flex flex-wrap gap-2">
+                           {selectedProviderForView.services.split(', ').map((s: string, idx: number) => (
+                              <span key={idx} className="px-3.5 py-1.5 bg-brand-primary/15 text-brand-primary text-[11px] font-black uppercase tracking-wider rounded-xl border border-brand-primary/25">
+                                 {s}
+                              </span>
+                           ))}
+                        </div>
+                     </div>
+                  )}
+
+                  {/* Profile Logistics Metadata */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     <div className="bg-brand-surface-card/65 p-4 rounded-2xl border border-brand-outline flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-brand-primary/15 text-brand-primary flex items-center justify-center">
+                           <MapPin size={18} />
+                        </div>
+                        <div>
+                           <p className="text-[10px] font-black text-brand-text-variant uppercase tracking-wider">Location</p>
+                           <p className="text-xs font-bold text-brand-text-main">{selectedProviderForView.location || 'Dasmariñas'}</p>
+                        </div>
+                     </div>
+
+                     <div className="bg-brand-surface-card/65 p-4 rounded-2xl border border-brand-outline flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-600 flex items-center justify-center">
+                           <Activity size={18} />
+                        </div>
+                        <div>
+                           <p className="text-[10px] font-black text-brand-text-variant uppercase tracking-wider">Coverage Radius</p>
+                           <p className="text-xs font-bold text-brand-text-main">{selectedProviderForView.service_radius || 5} km</p>
+                        </div>
+                     </div>
+
+                     {/* Payment Details */}
+                     <div className="bg-brand-surface-card/65 p-4 rounded-2xl border border-brand-outline flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-600 flex items-center justify-center">
+                           <Banknote size={18} />
+                        </div>
+                        <div>
+                           <p className="text-[10px] font-black text-brand-text-variant uppercase tracking-wider">GCash Status</p>
+                           <p className="text-xs font-bold text-brand-text-main">
+                              {selectedProviderForView.gcash_number || selectedProviderForView.maya_number 
+                                 ? `Enabled (${selectedProviderForView.gcash_number ? 'GCash' : ''} ${selectedProviderForView.maya_number ? 'Maya' : ''})` 
+                                 : 'Cash Only'}
+                           </p>
+                        </div>
+                     </div>
+
+                     <div className="bg-brand-surface-card/65 p-4 rounded-2xl border border-brand-outline flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center">
+                           <Users size={18} />
+                        </div>
+                        <div>
+                           <p className="text-[10px] font-black text-brand-text-variant uppercase tracking-wider">Average Rating</p>
+                           <p className="text-xs font-bold text-brand-text-main">
+                              {selectedProviderForView.total_reviews > 0 
+                                 ? `${selectedProviderForView.avg_rating.toFixed(1)} / 5.0 (⭐ ${selectedProviderForView.total_reviews} reviews)` 
+                                 : 'New Provider (⭐ New)'}
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Modal Footer CTA */}
+               <div className="p-8 border-t border-brand-outline flex gap-4 bg-brand-surface/50 backdrop-blur-md sticky bottom-0">
+                  <button 
+                     onClick={() => setSelectedProviderForView(null)}
+                     className="flex-1 py-4 bg-brand-surface border-2 border-brand-outline hover:bg-brand-surface-card text-brand-text-main rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                  >
+                     Close Profile
+                  </button>
+                  <button 
+                     onClick={() => {
+                        window.dispatchEvent(new CustomEvent('hire-provider', { detail: selectedProviderForView }));
+                        setSelectedProviderForView(null);
+                     }}
+                     className="flex-1 py-4 bg-brand-primary text-white hover:bg-[#059669] rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-brand-primary/20 active:scale-95 flex items-center justify-center gap-2"
+                  >
+                     Direct Hire Now <ChevronRight size={16} />
+                  </button>
+               </div>
+
+            </div>
+         </div>
       )}
     </div>
   );

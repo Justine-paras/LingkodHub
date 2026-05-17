@@ -6,7 +6,6 @@ import {
   User, 
   MapPin, 
   ChevronRight, 
-  Phone, 
   TrendingUp, 
   Star,
   Search,
@@ -14,6 +13,7 @@ import {
   Zap
 } from 'lucide-react';
 import { api } from '../../../services/api';
+import { UserProfileModal } from '../shared/UserProfileModal';
 
 export const ProviderHomeDashboard = () => {
   const [isOnline, setIsOnline] = React.useState(true);
@@ -27,6 +27,7 @@ export const ProviderHomeDashboard = () => {
   
   const [isEmailVerified, setIsEmailVerified] = React.useState(true);
   const [isProfileLoading, setIsProfileLoading] = React.useState(true);
+  const [selectedClientId, setSelectedClientId] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -110,7 +111,7 @@ export const ProviderHomeDashboard = () => {
           (j.status === 'pending' || j.status === 'open' || j.status === 'active')
         )); 
         
-        setStats(reviewsData);
+        setStats(reviews);
       } catch (error) {
         console.error('Failed to fetch dashboard data', error);
       } finally {
@@ -197,7 +198,7 @@ export const ProviderHomeDashboard = () => {
         <div className="flex items-center gap-4 bg-brand-surface-card border-2 border-brand-outline p-2 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow">
           <div className="px-8 py-3 border-r border-brand-outline">
             <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-1 opacity-70">Available Balance</p>
-            <p className="text-2xl font-black text-[#059669]">₱{lifetimeEarnings.toLocaleString()}</p>
+            <p className="text-2xl font-black text-[#059669]">â‚±{lifetimeEarnings.toLocaleString()}</p>
           </div>
           <div className="px-6 py-2">
             <button 
@@ -240,13 +241,13 @@ export const ProviderHomeDashboard = () => {
                            </div>
                            <div>
                               <h4 className="text-lg font-black text-brand-text-main leading-tight mb-1">{inv.title}</h4>
-                              <p className="text-xs font-bold text-brand-text-variant uppercase">{inv.client_name} • {inv.location}</p>
+                              <p className="text-xs font-bold text-brand-text-variant uppercase"><span onClick={() => setSelectedClientId(inv.client_id)} className="cursor-pointer border-b border-dashed border-brand-outline hover:border-brand-primary hover:text-brand-primary transition-colors text-brand-text-main" title="Click to view client profile">{inv.client_name}</span> â€¢ {inv.location}</p>
                            </div>
                         </div>
                         <div className="flex items-center gap-3">
                            <div className="text-right mr-4 hidden md:block">
                               <p className="text-[10px] font-black text-brand-text-variant uppercase tracking-widest">Offer Price</p>
-                              <p className="text-xl font-black text-brand-text-main">₱{Number(inv.budget || 0).toLocaleString()}</p>
+                              <p className="text-xl font-black text-brand-text-main">â‚±{Number(inv.budget || 0).toLocaleString()}</p>
                            </div>
                            <button 
                               onClick={async () => {
@@ -312,13 +313,19 @@ export const ProviderHomeDashboard = () => {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                     <div>
                       <h3 className="text-2xl font-bold text-brand-text-main mb-2">{nextUpJob.title}</h3>
-                      <div className="flex items-center gap-4 text-sm text-brand-text-variant">
-                        <span className="flex items-center gap-1.5 font-medium text-brand-text-main/80"><User size={16} /> {nextUpJob.client_name}</span>
+                      <div className="flex items-center gap-4 text-sm text-brand-text-variant flex-wrap">
+                        <span 
+                           onClick={() => setSelectedClientId(nextUpJob.client_id)}
+                           className="flex items-center gap-1.5 font-bold text-brand-primary/80 hover:text-brand-primary cursor-pointer border-b border-dashed border-brand-outline hover:border-brand-primary transition-colors"
+                           title="Click to view client profile"
+                        >
+                           <User size={16} /> {nextUpJob.client_name}
+                        </span>
                         <span className="flex items-center gap-1.5"><MapPin size={16} /> {nextUpJob.location}</span>
                       </div>
                     </div>
                     <div className="text-left md:text-right">
-                      <p className="text-3xl font-extrabold text-[#059669]">₱{Number(nextUpJob.budget || 0).toLocaleString()}</p>
+                      <p className="text-3xl font-extrabold text-[#059669]">â‚±{Number(nextUpJob.budget || 0).toLocaleString()}</p>
                       <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mt-1">Confirmed Rate</p>
                     </div>
                   </div>
@@ -329,18 +336,6 @@ export const ProviderHomeDashboard = () => {
                       className="px-6 py-3 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all flex items-center gap-2"
                     >
                       Get Directions <ChevronRight size={18} />
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (nextUpJob.client_phone) {
-                          window.location.href = `tel:${nextUpJob.client_phone}`;
-                        } else {
-                          alert(`Client ${nextUpJob.client_name} has no phone number listed.`);
-                        }
-                      }}
-                      className="px-6 py-3 bg-brand-surface border border-brand-outline text-brand-text-main font-bold rounded-2xl hover:bg-brand-surface-card transition-all flex items-center gap-2"
-                    >
-                      <Phone size={18} className="text-brand-primary" /> Call Client
                     </button>
                     {nextUpJob.status === 'pending' && (
                       <button 
@@ -401,7 +396,7 @@ export const ProviderHomeDashboard = () => {
                     <span className="flex items-center gap-1"><MapPin size={12} /> {job.location}</span>
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-brand-outline">
-                    <span className="text-lg font-bold text-brand-text-main">₱{Number(job.budget || 0).toLocaleString()}</span>
+                    <span className="text-lg font-bold text-brand-text-main">â‚±{Number(job.budget || 0).toLocaleString()}</span>
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -466,7 +461,7 @@ export const ProviderHomeDashboard = () => {
               <div>
                 <div className="flex justify-between items-end mb-2">
                   <p className="text-xs font-semibold text-brand-text-variant uppercase tracking-wider">Lifetime Earnings</p>
-                  <p className="text-2xl font-bold text-[#059669]">₱{lifetimeEarnings.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-[#059669]">â‚±{lifetimeEarnings.toLocaleString()}</p>
                 </div>
                 <p className="text-[10px] text-brand-text-variant mb-6 font-medium">Auto-payout scheduled for Friday</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -483,21 +478,14 @@ export const ProviderHomeDashboard = () => {
             </div>
           </div>
 
-          {/* Quick Tips or Announcements */}
-          <div className="bg-brand-primary p-8 rounded-[2.5rem] text-white relative overflow-hidden shadow-lg shadow-brand-primary/20">
-            <div className="absolute top-0 right-0 p-4 opacity-20">
-              <Star size={64} fill="white" />
-            </div>
-             <p className="text-[10px] font-bold uppercase tracking-widest mb-2 opacity-80">Provider Tip</p>
-             <h4 className="text-lg font-bold mb-4 leading-tight">Increase your hiring chance by 40%</h4>
-             <p className="text-xs leading-relaxed opacity-90 mb-6">Completing your specific skill certifications helps you stand out in the neighborhood search.</p>
-             <button className="w-full py-3 bg-white text-brand-primary font-bold rounded-2xl text-xs hover:bg-brand-primary-container transition-all">
-                Learn More
-             </button>
-          </div>
-          
+
         </div>
       </div>
+      <UserProfileModal 
+        userId={selectedClientId} 
+        isOpen={selectedClientId !== null} 
+        onClose={() => setSelectedClientId(null)} 
+      />
     </div>
   )
 }
@@ -629,7 +617,7 @@ export const BrowseJobsSection = () => {
             <div className="mt-auto flex items-center justify-between pt-6 border-t border-brand-outline">
               <div>
                 <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-0.5">Budget</p>
-                <p className="text-2xl font-extrabold text-brand-text-main tracking-tight">₱{Number(job.budget || 0).toLocaleString()}</p>
+                <p className="text-2xl font-extrabold text-brand-text-main tracking-tight">â‚±{Number(job.budget || 0).toLocaleString()}</p>
               </div>
               <button onClick={(e) => sendOffer(job.id, e)} className="px-8 py-3 bg-brand-primary text-white text-sm font-bold rounded-2xl hover:bg-[#059669] transition-all shadow-lg hover:shadow-brand-primary/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                 Send Offer

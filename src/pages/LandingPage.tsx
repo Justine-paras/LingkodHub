@@ -1,9 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, ShieldCheck, CheckCircle2, Headphones, Star } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import { useLanguage } from '../components/LanguageContext';
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { language, setLanguage, t } = useLanguage();
+
   return (
     <div className="min-h-screen bg-brand-surface font-sans flex flex-col selection:bg-brand-primary selection:text-white">
       <Navbar />
@@ -25,14 +28,14 @@ export default function LandingPage() {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-brand-primary/20 backdrop-blur-md border border-brand-primary/30 px-4 py-2 rounded-full mb-6">
               <span className="w-2 h-2 bg-brand-primary rounded-full animate-pulse"></span>
-              <span className="text-white text-xs font-bold tracking-widest uppercase">Trusted ng Kapitbahay</span>
+              <span className="text-white text-xs font-bold tracking-widest uppercase">{t('hero', 'tag')}</span>
             </div>
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white leading-[1.05] mb-6">
-              Serbisyong Pinoy, <br />
-              <span className="text-brand-accent">Gawang Kapitbahay.</span>
+              {t('hero', 'title1')} <br />
+              <span className="text-brand-accent">{t('hero', 'title2')}</span>
             </h1>
             <p className="text-lg text-gray-200 mb-10 max-w-md font-medium lg:text-xl leading-relaxed">
-              From aircon cleaning to home repairs, we connect you with the best local talents in your area. Safe, mabilis, at abot-kaya.
+              {t('hero', 'desc')}
             </p>
 
             {/* Search Bar */}
@@ -47,20 +50,20 @@ export default function LandingPage() {
               <input 
                 name="search"
                 type="text" 
-                placeholder="Anong service ang kailangan mo?" 
+                placeholder={t('hero', 'placeholderSearch')} 
                 className="flex-[2] bg-transparent border-none outline-none px-6 py-4 text-sm text-gray-900 placeholder:text-gray-500 w-full font-medium"
               />
               <div className="w-px h-6 bg-gray-200 shrink-0"></div>
               <input 
                 type="text" 
-                placeholder="Saan ka banda?" 
+                placeholder={t('hero', 'placeholderLocation')} 
                 className="flex-[1] bg-transparent border-none outline-none px-6 py-4 text-sm text-gray-900 placeholder:text-gray-500 w-full hidden sm:block font-medium"
               />
               <button 
                 type="submit"
                 className="bg-brand-primary hover:bg-brand-primary/90 text-white px-10 py-4 rounded-xl font-bold transition-all shrink-0 ml-2 whitespace-nowrap active:scale-95 shadow-lg shadow-brand-primary/20"
               >
-                Hanap Na
+                {t('hero', 'searchBtn')}
               </button>
             </form>
           </div>
@@ -71,22 +74,22 @@ export default function LandingPage() {
       <section className="py-24 px-8 max-w-7xl mx-auto w-full">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
           <div>
-            <span className="text-brand-primary font-bold tracking-[0.2em] uppercase text-xs mb-3 block">Top Picks</span>
-            <h2 className="text-4xl font-black text-gray-900 tracking-tight">Mga Suki na Serbisyo</h2>
+            <span className="text-brand-primary font-bold tracking-[0.2em] uppercase text-xs mb-3 block">{t('popular', 'tag')}</span>
+            <h2 className="text-4xl font-black text-gray-900 tracking-tight">{t('popular', 'title')}</h2>
           </div>
           <p className="text-gray-500 max-w-sm font-medium">
-            Ang pinaka-book na services sa iyong barangay ngayong linggo.
+            {t('popular', 'desc')}
           </p>
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
           {[
-            { title: 'Gawaing Bahay & Repairs', id: 'home-maintenance', img: '/assets/maintenance.png' },
-            { title: 'Linis & Laba', id: 'cleaning', img: '/assets/cleaning.png' },
-            { title: 'Ganda & Health', id: 'personal-care', img: 'https://images.unsplash.com/photo-1600334129128-685c5582fd35?w=600' },
-            { title: 'Gadget & Tech', id: 'tech', img: '/assets/tech.png' },
-            { title: 'Aral & Tutorials', id: 'education', img: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600' },
-            { title: 'Abot & Delivery', id: 'delivery', img: '/assets/delivery.png' },
+            { title: t('popular', 'cardGawa'), id: 'home-maintenance', img: '/assets/maintenance.png' },
+            { title: t('popular', 'cardLinis'), id: 'cleaning', img: '/assets/cleaning.png' },
+            { title: t('popular', 'cardGanda'), id: 'personal-care', img: 'https://images.unsplash.com/photo-1600334129128-685c5582fd35?w=600' },
+            { title: t('popular', 'cardGadget'), id: 'tech', img: '/assets/tech.png' },
+            { title: t('popular', 'cardAral'), id: 'education', img: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600' },
+            { title: t('popular', 'cardAbot'), id: 'delivery', img: '/assets/delivery.png' },
           ].map((service) => (
             <div 
               key={service.id} 
@@ -97,7 +100,7 @@ export default function LandingPage() {
                   <img src={service.img} alt={service.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                   <div className="absolute bottom-4 left-4 text-white font-bold transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
-                    Tingnan ang mga Suki →
+                    {t('popular', 'hoverText')}
                   </div>
                </div>
                <div className="p-6 flex-1 flex items-center justify-between">
@@ -126,27 +129,27 @@ export default function LandingPage() {
                 <Star fill="currentColor" size={24} />
               </div>
               <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Suki Rating</p>
-                <p className="text-2xl font-black text-gray-900">Top Trusted</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('suki', 'badgeTag')}</p>
+                <p className="text-2xl font-black text-gray-900">{t('suki', 'badgeTitle')}</p>
               </div>
             </div>
           </div>
 
           <div>
-            <span className="text-brand-primary font-bold tracking-[0.2em] uppercase text-xs mb-6 block">Ang "Suki" System</span>
+            <span className="text-brand-primary font-bold tracking-[0.2em] uppercase text-xs mb-6 block">{t('suki', 'tag')}</span>
             <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-8 tracking-tight leading-[1.1]">
-              Hindi lang basta service, <br />
-              <span className="text-brand-primary">ka-Suki na yan.</span>
+              {t('suki', 'title1')} <br />
+              <span className="text-brand-primary">{t('suki', 'title2')}</span>
             </h2>
             <p className="text-gray-600 text-lg leading-relaxed mb-10 font-medium">
-              Sa Lingkod Hub, we value long-term trust. Our "Suki" system helps you find providers who are already trusted by your neighbors. Repeat bookings mean higher trust scores!
+              {t('suki', 'desc')}
             </p>
             
             <div className="space-y-6">
               {[
-                { title: 'Subok na ng Marami', desc: 'See providers with high repeat booking rates in your barangay.' },
-                { title: 'Suki Discounts', desc: 'Get special rates and priority booking from your favorite partners.' },
-                { title: 'Trusted Kapitbahay', desc: 'Read reviews from real neighbors you can actually trust.' }
+                { title: t('suki', 'benefit1Title'), desc: t('suki', 'benefit1Desc') },
+                { title: t('suki', 'benefit2Title'), desc: t('suki', 'benefit2Desc') },
+                { title: t('suki', 'benefit3Title'), desc: t('suki', 'benefit3Desc') }
               ].map((item, i) => (
                 <div key={i} className="flex gap-5">
                   <div className="w-8 h-8 rounded-full bg-brand-primary text-white flex items-center justify-center shrink-0 mt-1">
@@ -167,13 +170,13 @@ export default function LandingPage() {
       <section className="py-24 px-8 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-20">
-            <span className="text-brand-primary font-bold tracking-[0.2em] uppercase text-xs mb-6 block">Siguradong Safe Ka</span>
+            <span className="text-brand-primary font-bold tracking-[0.2em] uppercase text-xs mb-6 block">{t('trust', 'tag')}</span>
             <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-6 tracking-tight leading-tight">
-              Kampante ka sa <br className="hidden sm:block" />
-              <span className="text-gray-400">bawat booking.</span>
+              {t('trust', 'title1')} <br className="hidden sm:block" />
+              <span className="text-gray-400">{t('trust', 'title2')}</span>
             </h2>
             <p className="text-gray-500 text-lg leading-relaxed font-medium">
-              Built on trust, localized for you. Every interaction is secured para iwas-stress at siguradong quality ang gawa.
+              {t('trust', 'desc')}
             </p>
           </div>
 
@@ -181,24 +184,24 @@ export default function LandingPage() {
             {[
               {
                 icon: ShieldCheck,
-                title: 'Protektado Ka',
-                desc: 'If something isn\'t right, handa ang aming team na ayusin ang dispute para sa\'yo.',
-                tag: '100% Secure',
-                detail: 'Service Protection'
+                title: t('trust', 'card1Title'),
+                desc: t('trust', 'card1Desc'),
+                tag: t('trust', 'card1Tag'),
+                detail: t('trust', 'card1Detail')
               },
               {
                 icon: CheckCircle2,
-                title: 'Verified Partners',
-                desc: 'Lahat ng providers ay dumaan sa background check at Barangay verification.',
-                tag: 'Subok na',
-                detail: 'ID & Background Checked'
+                title: t('trust', 'card2Title'),
+                desc: t('trust', 'card2Desc'),
+                tag: t('trust', 'card2Tag'),
+                detail: t('trust', 'card2Detail')
               },
               {
                 icon: Headphones,
-                title: 'Kausap na Tao',
-                desc: 'Walang bots dito. Local support team ang sasagot sa kahit anong concern mo.',
-                tag: '24/7 Gising',
-                detail: 'Chat, Email & Phone'
+                title: t('trust', 'card3Title'),
+                desc: t('trust', 'card3Desc'),
+                tag: t('trust', 'card3Tag'),
+                detail: t('trust', 'card3Detail')
               }
             ].map((feature, i) => (
               <div 
@@ -241,24 +244,26 @@ export default function LandingPage() {
       <section id="how-it-works" className="py-24 px-8 bg-gray-50/50">
         <div className="max-w-7xl mx-auto w-full">
           <div className="text-center max-w-2xl mx-auto mb-20">
-            <span className="text-brand-primary font-bold tracking-[0.2em] uppercase text-xs mb-6 block">Paano Gumagana?</span>
-            <h2 className="text-4xl font-black mb-6 tracking-tight text-gray-900">Madali lang: 3 steps at <br className="sm:hidden" /> tapos ang trabaho.</h2>
-            <p className="text-gray-500 font-medium">Mabilis, safe, at seamless ang bawat transaction para direcho trabaho agad.</p>
+            <span className="text-brand-primary font-bold tracking-[0.2em] uppercase text-xs mb-6 block">{t('howItWorks', 'tag')}</span>
+            <h2 className="text-4xl font-black mb-6 tracking-tight text-gray-900">
+              {t('howItWorks', 'title1')} <br className="sm:hidden" /> {t('howItWorks', 'title2')}
+            </h2>
+            <p className="text-gray-500 font-medium">{t('howItWorks', 'desc')}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
             {[
               {
-                title: 'Mag-search ng Service',
-                desc: 'I-browse ang mga categories o i-search ang specific na tulong na kailangan mo.'
+                title: t('howItWorks', 'step1Title'),
+                desc: t('howItWorks', 'step1Desc')
               },
               {
-                title: 'Pumili ng Suki',
-                desc: 'I-compare ang mga profiles, basahin ang reviews ng mga kapitbahay, at piliin ang swak sa budget.'
+                title: t('howItWorks', 'step2Title'),
+                desc: t('howItWorks', 'step2Desc')
               },
               {
-                title: 'Book & Relax',
-                desc: 'Mag-set ng schedule, magbayad nang safe, at i-enjoy ang trabahong pulido.'
+                title: t('howItWorks', 'step3Title'),
+                desc: t('howItWorks', 'step3Desc')
               }
             ].map((item, i) => (
               <div key={i} className="relative bg-white p-10 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300">
@@ -283,13 +288,13 @@ export default function LandingPage() {
           <div className="absolute bottom-10 right-10 w-96 h-96 border-8 border-white rounded-full"></div>
         </div>
         <div className="max-w-4xl mx-auto relative z-10">
-          <h2 className="text-4xl md:text-5xl font-black mb-6 text-white tracking-tight">Ready nang simulan ang project?</h2>
+          <h2 className="text-4xl md:text-5xl font-black mb-6 text-white tracking-tight">{t('cta', 'title')}</h2>
           <p className="text-green-50 text-lg mb-10 max-w-2xl mx-auto font-medium">
-            Maka-connect sa mga subok na service providers sa iyong barangay in minutes.
+            {t('cta', 'desc')}
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
             <Link to="/signup?type=client" className="bg-white text-brand-primary px-12 py-5 rounded-2xl font-bold shadow-2xl hover:bg-green-50 transition-all text-xl inline-flex items-center justify-center scale-100 hover:scale-105 active:scale-95 group">
-              Simulan na!
+              {t('cta', 'btn')}
               <ArrowRight className="ml-3 group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
@@ -301,13 +306,17 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-16 mb-20">
           <div className="md:col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-8 group inline-flex">
-              <div className="w-10 h-10 bg-brand-primary rounded-xl flex items-center justify-center shadow-lg shadow-brand-primary/20 group-hover:rotate-6 transition-transform">
-                <span className="text-white font-black text-xl leading-none">L</span>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-md shadow-brand-primary/10 group-hover:rotate-6 transition-all duration-500">
+                <img 
+                  src="/assets/logo.png" 
+                  alt="Lingkod Hub Logo" 
+                  className="w-[160%] h-[160%] max-w-none object-cover" 
+                />
               </div>
               <span className="text-2xl font-black tracking-tighter text-gray-900">Lingkod Hub</span>
             </Link>
             <p className="text-lg text-gray-400 max-w-sm leading-relaxed mb-8 font-medium">
-              The Philippines' most trusted marketplace for reliable local services and skilled professionals.
+              {t('footer', 'desc')}
             </p>
             <div className="flex gap-4">
               {['FB', 'TW', 'IG', 'LI'].map(social => (
@@ -321,10 +330,10 @@ export default function LandingPage() {
           <div>
             <h4 className="text-gray-900 font-black uppercase tracking-widest text-[10px] mb-8">Platform</h4>
             <ul className="space-y-4 text-sm font-bold">
-              <li><Link to="/services" className="hover:text-brand-primary transition-colors">Find Services</Link></li>
-              <li><Link to="/about" className="hover:text-brand-primary transition-colors">How it works</Link></li>
-              <li><Link to="/signup" className="hover:text-brand-primary transition-colors text-brand-accent">Maging Lingkod Partner</Link></li>
-              <li><Link to="/login" className="hover:text-brand-primary transition-colors">Provider Login</Link></li>
+              <li><Link to="/services" className="hover:text-brand-primary transition-colors">{t('nav', 'findServices')}</Link></li>
+              <li><Link to="/about" className="hover:text-brand-primary transition-colors">{t('nav', 'howItWorks')}</Link></li>
+              <li><Link to="/signup" className="hover:text-brand-primary transition-colors text-brand-accent">{t('footer', 'becomePartner')}</Link></li>
+              <li><Link to="/login" className="hover:text-brand-primary transition-colors">{t('nav', 'providerLogin')}</Link></li>
             </ul>
           </div>
           
@@ -340,13 +349,24 @@ export default function LandingPage() {
         </div>
         
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400">
-          <p>© 2026 Lingkod Hub Philippines. Ang inyong ka-Suki sa serbisyo.</p>
-          <div className="flex gap-8 mt-4 md:mt-0">
-            <span className="cursor-pointer hover:text-gray-900 transition-colors">English / Tagalog</span>
+          <p>{t('footer', 'copyright')}</p>
+          <div className="flex gap-4 mt-4 md:mt-0 items-center">
+            <button
+              onClick={() => setLanguage('taglish')}
+              className={`hover:text-gray-900 transition-colors font-black ${language === 'taglish' ? 'text-brand-primary underline underline-offset-4 decoration-2' : ''}`}
+            >
+              Taglish
+            </button>
+            <span className="text-gray-300">/</span>
+            <button
+              onClick={() => setLanguage('english')}
+              className={`hover:text-gray-900 transition-colors font-black ${language === 'english' ? 'text-brand-primary underline underline-offset-4 decoration-2' : ''}`}
+            >
+              English
+            </button>
           </div>
         </div>
       </footer>
     </div>
   );
 }
-

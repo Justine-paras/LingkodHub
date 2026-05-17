@@ -8,7 +8,9 @@ import {
   MapPin, 
   Trash2,
   CheckCircle,
-  Banknote
+  Banknote,
+  Shield,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../../../services/api';
@@ -62,6 +64,13 @@ export const ProviderProfileSettings = () => {
     type: 'privacy'
   });
   const [isPasswordModalOpen, setIsPasswordModalOpen] = React.useState(false);
+  const [isIdentityModalOpen, setIsIdentityModalOpen] = React.useState(false);
+  const [identityIdFile, setIdentityIdFile] = React.useState<File | null>(null);
+  const [identityIdUrl, setIdentityIdUrl] = React.useState('');
+  const [identitySelfieFile, setIdentitySelfieFile] = React.useState<File | null>(null);
+  const [identitySelfieUrl, setIdentitySelfieUrl] = React.useState('');
+  const [isSubmittingIdentity, setIsSubmittingIdentity] = React.useState(false);
+  const [identityIdType, setIdentityIdType] = React.useState('National ID');
   const [historyJobs, setHistoryJobs] = React.useState<any[]>([]);
   const [stats, setStats] = React.useState({ avg_rating: 0, total_reviews: 0 });
 
@@ -191,6 +200,29 @@ export const ProviderProfileSettings = () => {
     } catch (err) {
       console.error('Document upload failed', err);
       alert('Failed to upload documents.');
+    }
+  };
+
+  const handleIdentitySubmit = async () => {
+    if (!identityIdFile || !identitySelfieFile) {
+      alert('Please upload both your government ID and verification selfie.');
+      return;
+    }
+
+    setIsSubmittingIdentity(true);
+    try {
+      const { status, is_documents_verified } = await api.uploadDocuments(identityIdFile, identitySelfieFile);
+      setDocumentStatus(status);
+      setIsDocumentsVerified(!!is_documents_verified);
+      setIsIdentityModalOpen(false);
+      window.dispatchEvent(new CustomEvent('refresh-notifications'));
+      window.dispatchEvent(new CustomEvent('profile-updated'));
+      alert('Identity verified successfully! You are now a verified provider.');
+    } catch (err) {
+      console.error('Identity upload failed', err);
+      alert('Failed to submit identity documents.');
+    } finally {
+      setIsSubmittingIdentity(false);
     }
   };
 
@@ -354,55 +386,62 @@ export const ProviderProfileSettings = () => {
           <h1 className="text-3xl font-semibold text-brand-text-main mb-2">Account Settings</h1>
           <p className="text-sm text-brand-text-variant">Manage your professional account and personal details</p>
         </div>
-        <div className="flex gap-4 text-xs font-medium text-brand-text-variant mt-4 sm:mt-0">
-            {isDocumentsVerified ? (
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand-primary"></span> Verified Provider</span>
-            ) : (
-              <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-2 text-xs font-medium text-brand-text-variant mt-4 sm:mt-0">
+            {/* Identity / Document Verification */}
+            <div className="flex items-center gap-2">
+              {isDocumentsVerified ? (
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-black rounded-full uppercase tracking-wider border border-brand-primary/20">
+                  <CheckCircle size={10} className="fill-brand-primary text-white" />
+                  Verified Provider
+                </span>
+              ) : (
                 <div className="flex items-center gap-2">
                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand-accent"></span> Unverified Provider</span>
-                   {documentStatus === 'none' && (
-                     <>
-                       <input type="file" id="doc-upload" className="hidden" onChange={handleDocumentUpload} />
-                       <button 
-                         onClick={() => document.getElementById('doc-upload')?.click()}
-                         className="text-[10px] font-bold text-brand-primary hover:underline uppercase tracking-wider"
-                       >
-                         Verify Identity
-                       </button>
-                     </>
-                   )}
-                   {documentStatus === 'pending' && (
-                     <span className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Verification Pending</span>
+                   {documentStatus !== 'verified' && (
+                     <button 
+                       onClick={() => setIsIdentityModalOpen(true)}
+                       className="text-[10px] font-bold text-brand-primary hover:underline uppercase tracking-wider"
+                     >
+                       {documentStatus === 'pending' ? 'Update Verification' : 'Verify Identity'}
+                     </button>
                    )}
                 </div>
-                {!isEmailVerified && (
-                  <div className="flex items-center gap-2">
-                     <span className="text-[10px] text-brand-text-variant italic">Email unverified</span>
-                     {!isOTPSent ? (
-                       <button 
-                         onClick={handleSendOTP} 
-                         disabled={isSendingOTP}
-                         className="text-[10px] font-bold text-brand-primary hover:underline uppercase tracking-wider disabled:opacity-50"
-                       >
-                         {isSendingOTP ? 'Sending...' : 'Verify Email'}
-                       </button>
-                     ) : (
-                       <div className="flex items-center gap-1">
-                          <input 
-                            type="text" 
-                            placeholder="OTP" 
-                            className="w-12 px-1 py-0.5 text-[10px] border border-brand-outline rounded focus:outline-none" 
-                            value={otpValue}
-                            onChange={e => setOtpValue(e.target.value)}
-                          />
-                          <button onClick={handleVerifyOTP} className="text-[10px] font-bold text-brand-primary hover:underline uppercase tracking-wider">Submit</button>
-                       </div>
-                     )}
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+
+            {/* Email OTP Verification */}
+            <div className="flex items-center gap-2">
+              {isEmailVerified ? (
+                <span className="flex items-center gap-1 text-[10px] text-brand-primary font-bold">
+                  <CheckCircle size={10} className="fill-brand-primary text-white" />
+                  Email Verified
+                </span>
+              ) : (
+                <div className="flex items-center gap-2">
+                   <span className="text-[10px] text-brand-text-variant italic">Email unverified</span>
+                   {!isOTPSent ? (
+                     <button 
+                       onClick={handleSendOTP} 
+                       disabled={isSendingOTP}
+                       className="text-[10px] font-bold text-brand-primary hover:underline uppercase tracking-wider disabled:opacity-50"
+                     >
+                       {isSendingOTP ? 'Sending...' : 'Verify Email'}
+                     </button>
+                   ) : (
+                     <div className="flex items-center gap-1">
+                        <input 
+                          type="text" 
+                          placeholder="OTP" 
+                          className="w-12 px-1.5 py-0.5 text-[10px] border border-brand-outline rounded focus:outline-none" 
+                          value={otpValue}
+                          onChange={e => setOtpValue(e.target.value)}
+                        />
+                        <button onClick={handleVerifyOTP} className="text-[10px] font-bold text-brand-primary hover:underline uppercase tracking-wider">Submit</button>
+                     </div>
+                   )}
+                </div>
+              )}
+            </div>
         </div>
       </header>
 
@@ -1036,6 +1075,190 @@ export const ProviderProfileSettings = () => {
                   className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all disabled:opacity-50 disabled:shadow-none"
                 >
                   Delete Forever
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isIdentityModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsIdentityModalOpen(false)}
+              className="absolute inset-0 bg-brand-text-main/40 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-xl bg-brand-surface rounded-[2.5rem] shadow-2xl border border-brand-outline p-8 lg:p-10 flex flex-col max-h-[90vh]"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-brand-text-main flex items-center gap-2">
+                    <Shield size={24} className="text-brand-primary" /> Verify Your Identity
+                  </h2>
+                  <p className="text-sm text-brand-text-variant font-medium">Upload ID and a selfie to get Verified instantly.</p>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setIsIdentityModalOpen(false)} 
+                  className="w-10 h-10 rounded-full hover:bg-brand-surface-card flex items-center justify-center text-brand-text-variant"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto pr-2 custom-scrollbar space-y-6 flex-1">
+                <div className="p-4 bg-brand-primary/5 border border-brand-primary/20 rounded-2xl">
+                  <p className="text-xs text-brand-text-variant font-medium leading-relaxed">
+                    To safeguard our marketplace, we require a valid government ID and matching verification selfie. Submitted documents are processed instantly.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Government ID Select Card */}
+                  <div 
+                    onClick={() => {
+                      if (!identityIdUrl) {
+                        const input = document.getElementById('settings-id-input');
+                        input?.click();
+                      }
+                    }}
+                    className={`aspect-[4/3] bg-brand-surface-card border-2 rounded-2xl flex flex-col items-center justify-center gap-3 group transition-all relative overflow-hidden ${
+                      identityIdUrl 
+                        ? 'border-brand-primary/50' 
+                        : 'border-dashed border-brand-outline hover:border-brand-primary cursor-pointer'
+                    }`}
+                  >
+                    <input 
+                      type="file" 
+                      id="settings-id-input" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setIdentityIdFile(file);
+                          setIdentityIdUrl(URL.createObjectURL(file));
+                        }
+                      }}
+                    />
+                    {identityIdUrl ? (
+                      <>
+                        <img src={identityIdUrl} alt="ID Front Preview" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-brand-text-main/60 opacity-0 hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIdentityIdFile(null);
+                              setIdentityIdUrl('');
+                            }}
+                            className="p-3 bg-red-600 hover:bg-red-700 text-white rounded-full transition-all active:scale-95"
+                          >
+                            <X size={16} />
+                          </button>
+                          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Remove ID</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-brand-surface-container flex items-center justify-center text-brand-text-variant group-hover:bg-brand-primary/10 group-hover:text-brand-primary transition-colors">
+                           <Upload size={20} />
+                        </div>
+                        <span className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest group-hover:text-brand-primary transition-colors">ID Front View</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Selfie Select Card */}
+                  <div 
+                    onClick={() => {
+                      if (!identitySelfieUrl) {
+                        const input = document.getElementById('settings-selfie-input');
+                        input?.click();
+                      }
+                    }}
+                    className={`aspect-[4/3] bg-brand-surface-card border-2 rounded-2xl flex flex-col items-center justify-center gap-3 group transition-all relative overflow-hidden ${
+                      identitySelfieUrl 
+                        ? 'border-brand-primary/50' 
+                        : 'border-dashed border-brand-outline hover:border-brand-primary cursor-pointer'
+                    }`}
+                  >
+                    <input 
+                      type="file" 
+                      id="settings-selfie-input" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setIdentitySelfieFile(file);
+                          setIdentitySelfieUrl(URL.createObjectURL(file));
+                        }
+                      }}
+                    />
+                    {identitySelfieUrl ? (
+                      <>
+                        <img src={identitySelfieUrl} alt="Selfie Preview" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-brand-text-main/60 opacity-0 hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIdentitySelfieFile(null);
+                              setIdentitySelfieUrl('');
+                            }}
+                            className="p-3 bg-red-600 hover:bg-red-700 text-white rounded-full transition-all active:scale-95"
+                          >
+                            <X size={16} />
+                          </button>
+                          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Remove Selfie</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-brand-surface-container flex items-center justify-center text-brand-text-variant group-hover:bg-brand-primary/10 group-hover:text-brand-primary transition-colors">
+                           <Camera size={20} />
+                        </div>
+                        <span className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest group-hover:text-brand-primary transition-colors">Verification Selfie</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-brand-text-main ml-1 uppercase tracking-widest">Document Type</label>
+                  <select 
+                    value={identityIdType}
+                    onChange={e => setIdentityIdType(e.target.value)}
+                    className="w-full px-5 py-4 bg-brand-surface-card border border-brand-outline rounded-2xl text-sm font-medium appearance-none"
+                  >
+                    <option>National ID (PhilID)</option>
+                    <option>Driver's License</option>
+                    <option>Passport</option>
+                    <option>UMID</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-6 border-t border-brand-outline flex gap-4">
+                <button 
+                  onClick={() => setIsIdentityModalOpen(false)}
+                  className="flex-1 py-4 bg-brand-surface border-2 border-brand-outline text-brand-text-main font-bold rounded-2xl hover:bg-brand-surface-card transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleIdentitySubmit}
+                  disabled={isSubmittingIdentity || !identityIdUrl || !identitySelfieUrl}
+                  className="flex-1 py-4 bg-brand-primary text-white font-bold rounded-2xl shadow-lg shadow-brand-primary/20 hover:bg-[#059669] transition-all disabled:opacity-50"
+                >
+                  {isSubmittingIdentity ? 'Verifying...' : 'Verify Now'}
                 </button>
               </div>
             </motion.div>

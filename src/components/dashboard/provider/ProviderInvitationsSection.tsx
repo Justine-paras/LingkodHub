@@ -11,10 +11,12 @@ import {
   Info
 } from 'lucide-react';
 import { api } from '../../../services/api';
+import { UserProfileModal } from '../shared/UserProfileModal';
 
 export const ProviderInvitationsSection = () => {
   const [invitations, setInvitations] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [selectedClientId, setSelectedClientId] = React.useState<number | null>(null);
 
   const fetchInvitations = async () => {
     try {
@@ -157,11 +159,25 @@ export const ProviderInvitationsSection = () => {
                </div>
 
                <div className="flex items-center justify-between pt-6 border-t border-brand-outline/50 mb-8">
-                  <div className="flex items-center gap-4">
-                     <img src={inv.client_avatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&h=100&auto=format&fit=crop"} className="w-12 h-12 rounded-2xl object-cover border-2 border-brand-outline shadow-sm" alt="Client" />
+                  <div 
+                     onClick={() => setSelectedClientId(inv.client_id)}
+                     className="flex items-center gap-4 cursor-pointer group/client hover:opacity-85 hover:scale-[1.02] transition-all"
+                     title="Click to view client profile"
+                  >
+                     {inv.client_avatar ? (
+                        <img 
+                           src={inv.client_avatar.startsWith('http') ? inv.client_avatar : `http://localhost:3000${inv.client_avatar}`} 
+                           className="w-12 h-12 rounded-2xl object-cover border-2 border-brand-outline shadow-sm group-hover/client:border-brand-primary transition-colors" 
+                           alt="Client" 
+                        />
+                     ) : (
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white font-extrabold text-sm border-2 border-brand-outline shadow-sm shrink-0 group-hover/client:border-brand-primary transition-colors">
+                           {inv.client_name ? inv.client_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                        </div>
+                     )}
                      <div>
                         <p className="text-[10px] font-black text-brand-text-variant uppercase tracking-widest">Client</p>
-                        <p className="text-sm font-bold text-brand-text-main">{inv.client_name || 'Homeowner'}</p>
+                        <p className="text-sm font-bold text-brand-text-main group-hover/client:text-brand-primary transition-colors">{inv.client_name || 'Homeowner'}</p>
                      </div>
                   </div>
                   <div className="text-right">
@@ -189,6 +205,11 @@ export const ProviderInvitationsSection = () => {
           ))}
         </div>
       )}
+      <UserProfileModal 
+        userId={selectedClientId} 
+        isOpen={selectedClientId !== null} 
+        onClose={() => setSelectedClientId(null)} 
+      />
     </div>
   );
 };

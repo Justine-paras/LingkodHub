@@ -1,12 +1,13 @@
 import React from 'react';
 import { 
-  CheckCircle, 
-  Phone 
+  CheckCircle 
 } from 'lucide-react';
 import { api } from '../../../services/api';
+import { UserProfileModal } from '../shared/UserProfileModal';
 
 export const ProviderBidsSection = () => {
   const [offers, setOffers] = React.useState<any[]>([]);
+  const [selectedClientId, setSelectedClientId] = React.useState<number | null>(null);
 
   const fetchOffers = React.useCallback(() => {
     api.getMyApplications()
@@ -43,7 +44,23 @@ export const ProviderBidsSection = () => {
       <div className="space-y-6">
         {offers.map(offer => (
           <div key={offer.id} className="bg-brand-surface-card border border-brand-outline rounded-[2rem] p-6 shadow-sm flex flex-col md:flex-row md:items-center gap-6 group hover:border-brand-primary/30 transition-all">
-            <img src={offer.client_avatar || "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?q=80&w=64&h=64&auto=format&fit=crop"} className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-brand-outline" alt={offer.client_name} />
+            <div 
+               onClick={() => setSelectedClientId(offer.client_id)}
+               className="cursor-pointer group/client hover:opacity-85 hover:scale-[1.02] transition-all"
+               title="Click to view client profile"
+            >
+              {offer.client_avatar ? (
+                 <img 
+                    src={offer.client_avatar.startsWith('http') ? offer.client_avatar : `http://localhost:3000${offer.client_avatar}`} 
+                    className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-brand-outline group-hover/client:border-brand-primary transition-colors" 
+                    alt={offer.client_name} 
+                 />
+              ) : (
+                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white text-xl font-extrabold border border-brand-outline shrink-0 shadow-sm group-hover/client:border-brand-primary transition-colors">
+                    {offer.client_name ? offer.client_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                 </div>
+              )}
+            </div>
             
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-1.5 flex-wrap">
@@ -58,7 +75,7 @@ export const ProviderBidsSection = () => {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-brand-text-variant">Client: <span className="font-semibold text-brand-text-main">{offer.client_name}</span> • Sent {new Date(offer.created_at).toLocaleDateString()}</p>
+              <p className="text-sm text-brand-text-variant">Client: <span onClick={() => setSelectedClientId(offer.client_id)} className="font-bold border-b border-dashed border-brand-outline hover:border-brand-primary text-brand-text-main cursor-pointer hover:text-brand-primary transition-colors">{offer.client_name}</span> • Sent {new Date(offer.created_at).toLocaleDateString()}</p>
             </div>
 
             <div className="flex items-center gap-6 md:border-l md:border-brand-outline md:pl-8">
@@ -67,12 +84,6 @@ export const ProviderBidsSection = () => {
                 <p className="text-xl font-bold text-brand-text-main">₱{Number(offer.budget || 0).toLocaleString()}</p>
               </div>
                   <div className="flex gap-2">
-                <button 
-                  onClick={() => alert(`Client phone: ${offer.client_phone || 'N/A'}. Please use this for urgent coordination only.`)}
-                  className="p-3 bg-brand-surface border border-brand-outline rounded-xl hover:bg-brand-surface-card transition-colors text-brand-primary"
-                >
-                  <Phone size={20} />
-                </button>
                 {offer.status === 'pending' && (
                   <button 
                     onClick={async () => {
@@ -100,6 +111,11 @@ export const ProviderBidsSection = () => {
           </div>
         ))}
       </div>
+      <UserProfileModal 
+        userId={selectedClientId} 
+        isOpen={selectedClientId !== null} 
+        onClose={() => setSelectedClientId(null)} 
+      />
     </div>
   );
 };

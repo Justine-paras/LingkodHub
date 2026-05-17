@@ -262,9 +262,19 @@ export const HistorySection = () => {
                            </td>
                            <td className="px-6 py-6">
                               <div className="flex items-center gap-4">
-                                 <div className="w-10 h-10 rounded-xl overflow-hidden border border-brand-outline shadow-sm shrink-0">
-                                    <img src={job.workerAvatar} alt={job.worker} className="w-full h-full object-cover" />
-                                 </div>
+                                  {job.workerAvatar ? (
+                                     <div className="w-10 h-10 rounded-xl overflow-hidden border border-brand-outline shadow-sm shrink-0">
+                                        <img 
+                                           src={job.workerAvatar.startsWith('http') ? job.workerAvatar : `http://localhost:3000${job.workerAvatar}`} 
+                                           alt={job.worker} 
+                                           className="w-full h-full object-cover" 
+                                        />
+                                     </div>
+                                  ) : (
+                                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white font-extrabold text-xs border border-brand-outline shadow-sm shrink-0">
+                                        {job.worker ? job.worker.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                                     </div>
+                                  )}
                                  <div>
                                     <h4 className="text-sm font-black text-brand-text-main group-hover:text-brand-primary transition-colors leading-tight mb-1">{job.title}</h4>
                                     <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-tight">
@@ -385,7 +395,17 @@ export const HistorySection = () => {
                  <div className="flex items-center justify-between pt-8 border-t border-brand-outline">
                     <div className="flex items-center gap-5">
                        <div className="relative">
-                          <img src={selectedJob.workerAvatar} alt={selectedJob.worker} className="w-16 h-16 rounded-[1.25rem] object-cover border-2 border-brand-outline shadow-md" />
+                           {selectedJob.workerAvatar ? (
+                              <img 
+                                 src={selectedJob.workerAvatar.startsWith('http') ? selectedJob.workerAvatar : `http://localhost:3000${selectedJob.workerAvatar}`} 
+                                 alt={selectedJob.worker} 
+                                 className="w-16 h-16 rounded-[1.25rem] object-cover border-2 border-brand-outline shadow-md" 
+                              />
+                           ) : (
+                              <div className="w-16 h-16 rounded-[1.25rem] bg-gradient-to-br from-brand-primary to-emerald-600 flex items-center justify-center text-white font-extrabold text-base border-2 border-brand-outline shadow-md shrink-0">
+                                 {selectedJob.worker ? selectedJob.worker.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '?'}
+                              </div>
+                           )}
                           <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-brand-primary text-white rounded-full flex items-center justify-center border-2 border-brand-surface-card">
                              <CheckCircle size={12} />
                           </div>
