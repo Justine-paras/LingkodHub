@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -13,21 +14,63 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const { language, setLanguage, t } = useLanguage();
 
+  const slideshowImages = [
+    "/assets/hero.png",
+    "/assets/community.png",
+    "/assets/cleaning.png",
+    "/assets/delivery.png",
+    "/assets/maintenance.png",
+    "/assets/tech.png",
+  ];
+
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentSlideIndex((prevIndex) => (prevIndex + 1) % slideshowImages.length);
+    }, 6000); // Crossfade every 6 seconds
+
+    return () => clearInterval(interval);
+  }, [slideshowImages.length]);
+
   return (
     <div className="min-h-screen bg-brand-surface font-sans flex flex-col selection:bg-brand-primary selection:text-white">
       <Navbar />
 
       {/* Hero Section */}
-      <section className="relative flex items-center px-8 py-20 md:py-32 min-h-[85vh]">
-        {/* Background Image */}
-        <div
-          className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
-          style={{
-            backgroundImage: 'url("/assets/hero.png")',
-          }}
-        >
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent"></div>
+      <section className="relative flex items-center px-8 py-20 md:py-32 min-h-[85vh] overflow-hidden">
+        {/* Animated Background Slideshow */}
+        {slideshowImages.map((image, idx) => (
+          <div
+            key={image}
+            className={`absolute inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-[2500ms] ease-in-out transform ${
+              idx === currentSlideIndex
+                ? "opacity-100 scale-100"
+                : "opacity-0 scale-105 pointer-events-none"
+            }`}
+            style={{
+              backgroundImage: `url("${image}")`,
+            }}
+          >
+            {/* Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/45 to-transparent"></div>
+          </div>
+        ))}
+
+        {/* Slide Indicator Dots */}
+        <div className="absolute bottom-8 right-8 z-20 flex gap-2">
+          {slideshowImages.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => setCurrentSlideIndex(idx)}
+              aria-label={`Go to slide ${idx + 1}`}
+              className={`h-2.5 rounded-full transition-all duration-500 ${
+                idx === currentSlideIndex
+                  ? "w-8 bg-brand-accent shadow-[0_0_8px_rgba(255,200,0,0.5)]"
+                  : "w-2.5 bg-white/40 hover:bg-white/70"
+              }`}
+            />
+          ))}
         </div>
 
         <div className="relative z-10 max-w-7xl mx-auto w-full">

@@ -23,10 +23,10 @@ export const api = {
 
   // ─── Token Refresh & Auth-Aware Fetch ────────────────────────────────────
 
-  /**
-   * Tries to silently refresh the access token using the HttpOnly refresh cookie.
-   * Returns `true` on success, `false` if refresh is expired/invalid.
-   */
+  // [KEYWORD: #TOKEN_REFRESH]
+  // PURPOSE: Silently updates our JWT access token when it expires.
+  // HOW IT WORKS: Calls `/api/auth/refresh` on the server using secure, HttpOnly cookies.
+  // Returns true if the token is successfully refreshed, false if the refresh token itself is expired.
   async tryRefresh() {
     const response = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
@@ -36,11 +36,13 @@ export const api = {
     return response.ok;
   },
 
-  /**
-   * A wrapper around `fetch` that automatically retries once after a token
-   * refresh on 401/403. If the refresh also fails, it logs the user out and
-   * redirects to the login page.
-   */
+  // [KEYWORD: #API_SERVICE]
+  // PURPOSE: A custom, wrapper around standard 'fetch' that intercepts session expiration errors.
+  // HOW IT WORKS: When a fetch request fails with HTTP 401/403 (unauthorized/forbidden):
+  // 1. It pauses the client flow.
+  // 2. Triggers 'tryRefresh()' to silently get a new access token.
+  // 3. If the refresh succeeds, it uses recursion to retry the original request.
+  // 4. If the refresh fails, it automatically redirects the user to the '/login' page.
   async authFetch(url, options = {}, retry = true) {
     const { skipRedirect, ...fetchOptions } = options;
     const response = await fetch(url, {
@@ -346,20 +348,18 @@ export const api = {
     return this.safeJson(response, "Failed to fetch user profile");
   },
 
-  // ─── Messaging ─────────────────────────────────────────────────────────────
-
   async getConversations() {
-    const response = await this.authFetch(`${API_BASE}/messages/conversations`);
+    const response = await this.authFetch(`${API_BASE}/job-events/conversations`);
     return this.safeJson(response, "Failed to fetch conversations");
   },
 
   async getMessages(userId) {
-    const response = await this.authFetch(`${API_BASE}/messages/${userId}`);
+    const response = await this.authFetch(`${API_BASE}/job-events/${userId}`);
     return this.safeJson(response, "Failed to fetch messages");
   },
 
   async sendMessage(receiverId, content, jobId) {
-    const response = await this.authFetch(`${API_BASE}/messages`, {
+    const response = await this.authFetch(`${API_BASE}/job-events`, {
       method: "POST",
       body: JSON.stringify({ receiver_id: receiverId, content, job_id: jobId }),
     });
@@ -368,7 +368,7 @@ export const api = {
 
   async markMessagesRead(userId) {
     const response = await this.authFetch(
-      `${API_BASE}/messages/read/${userId}`,
+      `${API_BASE}/job-events/read/${userId}`,
       { method: "PUT" },
     );
     return this.safeJson(response, "Failed to mark messages as read");

@@ -6,3 +6,13 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local SQLite Database
+database.sqlite
+*.sqlite
+*.db
+
+# User Uploads
+uploads/*
+!uploads/.gitkeep
+

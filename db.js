@@ -11,12 +11,19 @@ db.pragma("foreign_keys = ON");
 
 // Initialize database schema
 export function initDb() {
+  // Rename messages to job_events before creating tables if messages exists
+  const hasMessages = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'").get();
+  const hasJobEvents = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='job_events'").get();
+  if (hasMessages && !hasJobEvents) {
+    db.exec("ALTER TABLE messages RENAME TO job_events");
+    console.log("[db] Migration: renamed messages to job_events");
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       role TEXT NOT NULL CHECK(role IN ('client', 'provider')),
       full_name TEXT NOT NULL,
-      username TEXT,
       avatar_url TEXT,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
@@ -64,7 +71,7 @@ export function initDb() {
       FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
       FOREIGN KEY (provider_id) REFERENCES users(id) ON DELETE CASCADE
     );
-    CREATE TABLE IF NOT EXISTS messages (
+    CREATE TABLE IF NOT EXISTS job_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       sender_id INTEGER NOT NULL,
       receiver_id INTEGER NOT NULL,
