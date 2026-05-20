@@ -1,8 +1,7 @@
 import jwt from "jsonwebtoken";
 import db from "../db.js";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
+// ─── Cookie Parser Helper ──────────────────────────────────────────────────────
 function parseCookie(req, name) {
   const raw = req.headers.cookie;
   if (!raw) return undefined;
@@ -14,8 +13,13 @@ function parseCookie(req, name) {
   return undefined;
 }
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
+// ─── Middleware Guards ─────────────────────────────────────────────────────────
 
+// [KEYWORD: #MIDDLEWARE_AUTH]
+// PURPOSE: Protects backend routes by verifying the user's active session.
+// HOW IT WORKS: Scans HTTP authorization headers or cookies for a JSON Web Token (JWT).
+// If missing, returns 401 (Unauthorized). If invalid/expired, returns 403 (Forbidden).
+// On success, decodes user info into req.user and passes control to the next handler.
 export const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const bearerToken = authHeader && authHeader.split(" ")[1];
@@ -38,6 +42,10 @@ export const authenticateToken = (req, res, next) => {
   });
 };
 
+// [KEYWORD: #EMAIL_VERIFICATION]
+// PURPOSE: Restricts certain actions to users who have completed their email validation.
+// HOW IT WORKS: Queries the SQLite database to check if the current user has 'is_email_verified = 1'.
+// If not verified, blocks the request with a 403 status code and error messages.
 export const requireVerified = (req, res, next) => {
   if (!req.user) {
     res.sendStatus(401);
@@ -55,3 +63,4 @@ export const requireVerified = (req, res, next) => {
   }
   next();
 };
+

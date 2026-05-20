@@ -22,17 +22,17 @@ router.get("/conversations", authenticateToken, (req, res) => {
       SELECT
         CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END AS other_id,
         MAX(id) AS last_msg_id
-      FROM messages
+      FROM job_events
       WHERE sender_id = ? OR receiver_id = ?
       GROUP BY other_id
     )
     SELECT
       m.id, m.content, m.is_read, m.created_at, m.sender_id,
       u.id AS other_id, u.full_name AS other_name, u.avatar_url AS other_avatar,
-      (SELECT COUNT(*) FROM messages
+      (SELECT COUNT(*) FROM job_events
         WHERE receiver_id = ? AND sender_id = c.other_id AND is_read = 0) AS unread_count
     FROM convos c
-    JOIN messages m ON m.id = c.last_msg_id
+    JOIN job_events m ON m.id = c.last_msg_id
     JOIN users u ON u.id = c.other_id
     ORDER BY m.created_at DESC
   `,
@@ -54,7 +54,7 @@ router.get("/:userId", authenticateToken, (req, res) => {
     .prepare(
       `
     SELECT m.*, s.full_name AS sender_name, s.avatar_url AS sender_avatar
-    FROM messages m
+    FROM job_events m
     JOIN users s ON m.sender_id = s.id
     WHERE (m.sender_id = ? AND m.receiver_id = ?)
        OR (m.sender_id = ? AND m.receiver_id = ?)
@@ -66,7 +66,7 @@ router.get("/:userId", authenticateToken, (req, res) => {
 
   // Auto mark received messages as read
   db.prepare(
-    "UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0",
+    "UPDATE job_events SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0",
   ).run(me, other);
 
   res.json(messages);
@@ -95,7 +95,7 @@ router.post(
 
     const result = db
       .prepare(
-        "INSERT INTO messages (sender_id, receiver_id, job_id, content) VALUES (?, ?, ?, ?)",
+        "INSERT INTO job_events (sender_id, receiver_id, job_id, content) VALUES (?, ?, ?, ?)",
       )
       .run(req.user.id, receiver_id, job_id ?? null, content);
 
@@ -116,7 +116,7 @@ router.post(
       .status(201)
       .json(
         db
-          .prepare("SELECT * FROM messages WHERE id = ?")
+          .prepare("SELECT * FROM job_events WHERE id = ?")
           .get(result.lastInsertRowid),
       );
   },
@@ -131,7 +131,7 @@ router.put("/read/:userId", authenticateToken, (req, res) => {
   }
   const info = db
     .prepare(
-      "UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0",
+      "UPDATE job_events SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0",
     )
     .run(req.user.id, other);
   res.json({ marked: info.changes });

@@ -296,8 +296,15 @@ router.delete("/:id", authenticateToken, (req, res) => {
   res.json({ success: true });
 });
 
-// ─── Job Status ───────────────────────────────────────────────────────────────
-
+// [KEYWORD: #JOB_STATUS_TRANSITION]
+// PURPOSE: Governs state transitions for a job booking (State Machine).
+// HOW IT WORKS: 
+// 1. Checks if the caller is the authorized Client or Provider.
+// 2. Looks up the current status and validates if the transition is allowed based on a strict mapping:
+//    - 'pending' can move to 'in_progress' or 'cancelled'.
+//    - 'in_progress' can move to 'completed' or 'cancelled'.
+// 3. Updates the 'jobs' table 'status' in SQLite.
+// 4. Triggers background notifications to both parties on completion.
 router.put(
   "/:id/status",
   authenticateToken,
@@ -452,7 +459,7 @@ router.get("/:id/applications", authenticateToken, (req, res) => {
       .prepare(
         `
     SELECT a.*,
-      u.full_name, u.username, u.avatar_url, u.phone, u.location, u.about_me,
+      u.full_name, u.avatar_url, u.phone, u.location, u.about_me,
       (SELECT GROUP_CONCAT(s.name, ', ')
         FROM provider_services ps JOIN services s ON ps.service_id = s.id
         WHERE ps.provider_id = u.id

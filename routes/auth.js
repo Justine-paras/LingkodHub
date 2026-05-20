@@ -94,7 +94,6 @@ function revokeRefreshToken(token, replacedByToken) {
 const registerSchema = z.object({
   role: z.enum(["client", "provider"]),
   full_name: z.string().min(2).max(100),
-  username: z.string().max(50).optional(),
   avatar_url: z.string().url().optional().or(z.literal("")),
   email: z.string().email(),
   password: z.string().min(8).max(128),
@@ -130,7 +129,6 @@ router.post("/register", authLimiter, validate(registerSchema), (req, res) => {
   const {
     role,
     full_name,
-    username,
     avatar_url,
     email,
     password,
@@ -145,14 +143,13 @@ router.post("/register", authLimiter, validate(registerSchema), (req, res) => {
     const result = db
       .prepare(
         `
-      INSERT INTO users (role, full_name, username, avatar_url, email, password_hash, phone, location, about_me, payment_method)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (role, full_name, avatar_url, email, password_hash, phone, location, about_me, payment_method)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       )
       .run(
         role,
         full_name,
-        username || "",
         avatar_url || "",
         email,
         password_hash,
@@ -164,7 +161,7 @@ router.post("/register", authLimiter, validate(registerSchema), (req, res) => {
 
     const user = db
       .prepare(
-        "SELECT id, role, full_name, username, avatar_url, email, payment_method FROM users WHERE id = ?",
+        "SELECT id, role, full_name, avatar_url, email, payment_method FROM users WHERE id = ?",
       )
       .get(result.lastInsertRowid);
 

@@ -11,7 +11,6 @@ const router = Router();
 
 const updateMeSchema = z.object({
   full_name: z.string().min(2).max(100).optional(),
-  username: z.string().max(50).optional(),
   avatar_url: z.string().optional().or(z.literal("")),
   phone: z.string().max(30).optional(),
   location: z.string().max(150).optional(),
@@ -44,7 +43,7 @@ const addressSchema = z.object({
 router.get("/me", authenticateToken, (req, res) => {
   const user = db
     .prepare(
-      "SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, verification_selfie_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?",
+      "SELECT id, role, full_name, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, verification_selfie_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?",
     )
     .get(req.user.id);
   if (!user) {
@@ -74,7 +73,6 @@ router.post(
 router.put("/me", authenticateToken, validate(updateMeSchema), (req, res) => {
   const {
     full_name,
-    username,
     avatar_url,
     phone,
     location,
@@ -98,10 +96,6 @@ router.put("/me", authenticateToken, validate(updateMeSchema), (req, res) => {
   if (full_name !== undefined) {
     updates.push("full_name = ?");
     params.push(full_name);
-  }
-  if (username !== undefined) {
-    updates.push("username = ?");
-    params.push(username);
   }
   if (avatar_url !== undefined) {
     updates.push("avatar_url = ?");
@@ -174,7 +168,7 @@ router.put("/me", authenticateToken, validate(updateMeSchema), (req, res) => {
   res.json(
     db
       .prepare(
-        "SELECT id, role, full_name, username, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, verification_selfie_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?",
+        "SELECT id, role, full_name, avatar_url, email, phone, location, about_me, payment_method, gcash_number, maya_number, service_radius, is_email_verified, is_documents_verified, document_status, verification_document_url, verification_selfie_url, pref_email_messages, pref_email_updates, pref_email_promos, pref_push_alerts, pref_push_marketing, is_public_profile, show_online_status, created_at FROM users WHERE id = ?",
       )
       .get(req.user.id),
   );

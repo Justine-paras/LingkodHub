@@ -27,7 +27,6 @@ vi.mock("../db.js", () => {
             const [
               role,
               full_name,
-              username,
               avatar_url,
               email,
               password_hash,
@@ -40,7 +39,6 @@ vi.mock("../db.js", () => {
               id: state.nextUserId++,
               role,
               full_name,
-              username,
               avatar_url,
               email,
               password_hash,
@@ -118,7 +116,7 @@ vi.mock("../db.js", () => {
         get: (...args) => {
           if (
             normalized ===
-            "SELECT id, role, full_name, username, avatar_url, email, payment_method FROM users WHERE id = ?"
+            "SELECT id, role, full_name, avatar_url, email, payment_method FROM users WHERE id = ?"
           ) {
             const user = state.users.find((u) => u.id === Number(args[0]));
             if (!user) return undefined;
@@ -126,7 +124,6 @@ vi.mock("../db.js", () => {
               id: user.id,
               role: user.role,
               full_name: user.full_name,
-              username: user.username,
               avatar_url: user.avatar_url,
               email: user.email,
               payment_method: user.payment_method,
@@ -202,7 +199,6 @@ async function registerDefaultUser(app) {
   return request(app).post("/api/auth/register").send({
     role: "client",
     full_name: "Test User",
-    username: "testuser",
     avatar_url: "",
     email: "test@example.com",
     password: "password123",

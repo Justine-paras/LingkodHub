@@ -6,6 +6,9 @@ export const EarningsSection = () => {
   const [jobs, setJobs] = React.useState([]);
   const [paymentMethod, setPaymentMethod] = React.useState("none");
   const [isLoading, setIsLoading] = React.useState(true);
+  const [totalWithdrawn, setTotalWithdrawn] = React.useState(() => {
+    return Number(localStorage.getItem("earningsTotalWithdrawn") || 0);
+  });
 
   const fetchData = React.useCallback(async () => {
     try {
@@ -90,17 +93,38 @@ export const EarningsSection = () => {
             </p>
             <p className="text-xl font-bold text-[#059669]">
               ₱
-              {totalEarned.toLocaleString(undefined, {
+              {(Math.max(0, totalEarned - totalWithdrawn)).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+          </div>
+          <div className="px-6 py-2 text-center border-r border-brand-outline">
+            <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mb-0.5">
+              Total Withdrawn
+            </p>
+            <p className="text-xl font-bold text-brand-text-main">
+              ₱
+              {totalWithdrawn.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
               })}
             </p>
           </div>
           <button
             onClick={() => {
-              if (totalEarned > 0) {
+              const available = Math.max(0, totalEarned - totalWithdrawn);
+              if (available > 0) {
+                const newWithdrawn = totalWithdrawn + available;
+                setTotalWithdrawn(newWithdrawn);
+                localStorage.setItem("earningsTotalWithdrawn", newWithdrawn.toString());
                 alert(
-                  `Payout of ₱${totalEarned.toLocaleString()} requested to your ${paymentMethod === "none" ? "default account" : paymentMethod.toUpperCase()}.`,
+                  `Payout of ₱${available.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })} requested to your ${paymentMethod === "none" ? "default account" : paymentMethod.toUpperCase()}.`,
                 );
+                // Sync with other parts of the dashboard
+                const channel = new BroadcastChannel("dashboard_sync");
+                channel.postMessage({ type: "DATA_UPDATED" });
+                channel.close();
               } else {
                 alert("No funds available for payout.");
               }
@@ -181,6 +205,14 @@ export const EarningsSection = () => {
                 Pending Clearances
               </span>
               <span className="text-brand-text-main font-bold">₱0</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-brand-text-variant font-medium">
+                Total Withdrawn
+              </span>
+              <span className="text-red-500 font-bold">
+                -₱{totalWithdrawn.toLocaleString()}
+              </span>
             </div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-brand-text-variant font-medium">

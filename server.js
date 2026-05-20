@@ -13,7 +13,7 @@ import usersRouter from "./routes/users.js";
 import jobsRouter from "./routes/jobs.js";
 import applicationsRouter from "./routes/applications.js";
 import providersRouter from "./routes/providers.js";
-import messagesRouter from "./routes/messages.js";
+import jobEventsRouter from "./routes/job_events.js";
 import notificationsRouter from "./routes/notifications.js";
 import supportRouter from "./routes/support.js";
 
@@ -93,7 +93,7 @@ export async function createApp({
   app.use("/api/jobs", jobsRouter);
   app.use("/api/applications", applicationsRouter);
   app.use("/api/providers", providersRouter);
-  app.use("/api/messages", messagesRouter);
+  app.use("/api/job-events", jobEventsRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/support", supportRouter);
   app.use("/api/users", usersReviewRouter); // /api/users/:id/reviews

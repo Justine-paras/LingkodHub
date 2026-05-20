@@ -1,6 +1,13 @@
 import multer from "multer";
 import path from "path";
 import crypto from "crypto";
+import fs from "fs";
+
+// Ensure uploads directory exists to prevent server crash during file uploads
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {

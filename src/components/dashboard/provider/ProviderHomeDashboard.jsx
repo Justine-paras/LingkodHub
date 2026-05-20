@@ -172,6 +172,8 @@ export const ProviderHomeDashboard = () => {
     (sum, j) => sum + Number(j.budget || 0),
     0,
   );
+  const totalWithdrawn = Number(localStorage.getItem("earningsTotalWithdrawn") || 0);
+  const availableBalance = Math.max(0, lifetimeEarnings - totalWithdrawn);
   // Calculate today's revenue from scheduled jobs
   const todayRevenue = ongoingJobs
     .filter((j) => {
@@ -252,7 +254,7 @@ export const ProviderHomeDashboard = () => {
               Available Balance
             </p>
             <p className="text-2xl font-black text-[#059669]">
-              â‚±{lifetimeEarnings.toLocaleString()}
+              ₱{availableBalance.toLocaleString()}
             </p>
           </div>
           <div className="px-6 py-2">
@@ -310,7 +312,7 @@ export const ProviderHomeDashboard = () => {
                           >
                             {inv.client_name}
                           </span>{" "}
-                          â€¢ {inv.location}
+                          • {inv.location}
                         </p>
                       </div>
                     </div>
@@ -320,7 +322,7 @@ export const ProviderHomeDashboard = () => {
                           Offer Price
                         </p>
                         <p className="text-xl font-black text-brand-text-main">
-                          â‚±{Number(inv.budget || 0).toLocaleString()}
+                          ₱{Number(inv.budget || 0).toLocaleString()}
                         </p>
                       </div>
                       <button
@@ -429,7 +431,7 @@ export const ProviderHomeDashboard = () => {
                     </div>
                     <div className="text-left md:text-right">
                       <p className="text-3xl font-extrabold text-[#059669]">
-                        â‚±{Number(nextUpJob.budget || 0).toLocaleString()}
+                        ₱{Number(nextUpJob.budget || 0).toLocaleString()}
                       </p>
                       <p className="text-[10px] font-bold text-brand-text-variant uppercase tracking-widest mt-1">
                         Confirmed Rate
@@ -543,7 +545,7 @@ export const ProviderHomeDashboard = () => {
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-brand-outline">
                     <span className="text-lg font-bold text-brand-text-main">
-                      â‚±{Number(job.budget || 0).toLocaleString()}
+                      ₱{Number(job.budget || 0).toLocaleString()}
                     </span>
                     <button
                       onClick={(e) => {
@@ -641,7 +643,7 @@ export const ProviderHomeDashboard = () => {
                     Lifetime Earnings
                   </p>
                   <p className="text-2xl font-bold text-[#059669]">
-                    â‚±{lifetimeEarnings.toLocaleString()}
+                    ₱{lifetimeEarnings.toLocaleString()}
                   </p>
                 </div>
                 <p className="text-[10px] text-brand-text-variant mb-6 font-medium">
@@ -831,7 +833,7 @@ export const BrowseJobsSection = () => {
                     Budget
                   </p>
                   <p className="text-2xl font-extrabold text-brand-text-main tracking-tight">
-                    â‚±{Number(job.budget || 0).toLocaleString()}
+                    ₱{Number(job.budget || 0).toLocaleString()}
                   </p>
                 </div>
                 <button
